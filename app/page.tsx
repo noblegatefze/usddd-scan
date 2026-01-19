@@ -165,7 +165,7 @@ function LatestGoldenFindsTable() {
 
     (async () => {
       try {
-        const res = await fetch("/api/golden-finds/latest?limit=10", { cache: "no-store" });
+        const res = await fetch("/api/golden-finds/latest?limit=5", { cache: "no-store" });
         const json = (await res.json()) as any;
         if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
         const dataRows = (json?.rows ?? []) as GoldenFindRow[];
