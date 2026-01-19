@@ -70,6 +70,12 @@ function relTime(ts: string | null) {
   return `${d}d`;
 }
 
+const LINKS = {
+  terminal: "https://digdug.do",
+  telegram: "https://t.me/digdugdo",
+  docs: "https://github.com/noblegatefze/digdug-whitepaper",
+};
+
 function NetworkActivityCard() {
   const [data, setData] = React.useState<ActivityResp | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -355,9 +361,7 @@ function GoldenWinnersLeaderboard() {
             <div className="truncate text-slate-200">
               <span className="text-slate-500">{idx + 1}.</span> {r.winner}
             </div>
-            <div className="mt-1 text-[12px] text-slate-400">
-              Wins: {fmt(r.wins)}
-            </div>
+            <div className="mt-1 text-[12px] text-slate-400">Wins: {fmt(r.wins)}</div>
           </div>
           <div className="shrink-0 text-right">
             <div className="font-semibold text-slate-200">{fmtUsd(r.usd_total)}</div>
@@ -412,7 +416,7 @@ export default function Home() {
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <a
-                href="https://digdug.do"
+                href={LINKS.terminal}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
@@ -420,13 +424,15 @@ export default function Home() {
                 Open Terminal
               </a>
               <a
-                href="#"
+                href={LINKS.telegram}
+                target="_blank"
+                rel="noreferrer"
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
               >
                 Telegram
               </a>
               <a
-                href="https://github.com/noblegatefze/digdug-whitepaper"
+                href={LINKS.docs}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
@@ -457,7 +463,12 @@ export default function Home() {
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-200">Latest Golden Finds</h2>
-              <a href="#" className="text-[11px] text-slate-400 hover:text-slate-200">
+              <a
+                href={LINKS.terminal}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-slate-400 hover:text-slate-200"
+              >
                 View all
               </a>
             </div>
@@ -467,7 +478,7 @@ export default function Home() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Use the Terminal to DIG and earn rewards.</div>
               <a
-                href="https://digdug.do"
+                href={LINKS.terminal}
                 target="_blank"
                 rel="noreferrer"
                 className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
@@ -475,7 +486,9 @@ export default function Home() {
                 Open Terminal
               </a>
               <a
-                href="#"
+                href={LINKS.telegram}
+                target="_blank"
+                rel="noreferrer"
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
               >
                 Join Telegram
@@ -486,7 +499,12 @@ export default function Home() {
           <section className="md:col-span-8 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-200">Box Balances</h2>
-              <a href="#" className="text-[11px] text-slate-400 hover:text-slate-200">
+              <a
+                href={LINKS.terminal}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-slate-400 hover:text-slate-200"
+              >
                 View all
               </a>
             </div>
@@ -496,7 +514,7 @@ export default function Home() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
               <a
-                href="https://digdug.do"
+                href={LINKS.terminal}
                 target="_blank"
                 rel="noreferrer"
                 className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
@@ -504,7 +522,7 @@ export default function Home() {
                 Become a Sponsor
               </a>
               <a
-                href="https://github.com/noblegatefze/digdug-whitepaper"
+                href={LINKS.docs}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
@@ -525,21 +543,6 @@ export default function Home() {
                 <div className="text-slate-200">Golden winners</div>
                 <div className="mt-1 text-[12px] text-slate-400">Top by wins / USD</div>
                 <GoldenWinnersLeaderboard />
-              </div>
-
-              <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-                <div className="text-slate-200">Top diggers</div>
-                <div className="mt-1 text-[12px] text-slate-400">Anon installs</div>
-              </div>
-
-              <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-                <div className="text-slate-200">Top spend</div>
-                <div className="mt-1 text-[12px] text-slate-400">USDDD spent</div>
-              </div>
-
-              <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-                <div className="text-slate-200">Top rewards</div>
-                <div className="mt-1 text-[12px] text-slate-400">USD earned</div>
               </div>
             </div>
           </section>
