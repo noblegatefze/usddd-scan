@@ -12,6 +12,15 @@ const SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 const TABLE_GOLDEN_EVENTS = "dd_tg_golden_events";
 
+type GoldenEventRow = {
+  created_at: string | null;
+  claim_code: string | null;
+  terminal_username: string | null;
+  token: string | null;
+  chain: string | null;
+  usd_value: number | string | null;
+};
+
 /**
  * Keep it simple: do NOT try to strip unicode aggressively.
  * We just normalize whitespace and mask with ASCII "...".
@@ -35,12 +44,18 @@ function maskUsername(u: string | null | undefined) {
   return `${s.slice(0, 3)}...${s.slice(-3)}`;
 }
 
+function toUsd(v: number | string | null | undefined): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const limit = Math.min(
-    Math.max(Number(url.searchParams.get("limit") ?? 20), 1),
-    50
-  );
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 20), 1), 50);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -56,16 +71,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const rows = (data ?? []).map((r: any) => ({
+  const typed = (data ?? []) as GoldenEventRow[];
+
+  const rows = typed.map((r) => ({
     ts: r.created_at ?? null,
     claim: r.claim_code ?? null,
-
-    // what the UI should use
     winner: maskUsername(r.terminal_username),
-
     token: r.token ?? null,
     chain: r.chain ?? null,
-    usd: typeof r.usd_value === "number" ? r.usd_value : Number(r.usd_value ?? 0) || 0,
+    usd: toUsd(r.usd_value),
   }));
 
   return NextResponse.json({ ok: true, rows });

@@ -9,6 +9,13 @@ function reqEnv(name: string) {
 const SUPABASE_URL = reqEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
 
+type RpcOk = Record<string, unknown>;
+type RpcErr = { message?: string };
+
+function isRpcErr(v: unknown): v is RpcErr {
+  return typeof v === "object" && v !== null && "message" in v;
+}
+
 export async function GET() {
   // Call the same RPC used by digdug-terminal: /rest/v1/rpc/stats_summary
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/stats_summary`, {
@@ -22,24 +29,29 @@ export async function GET() {
   });
 
   const text = await r.text();
-  let data: any = null;
+
+  let parsed: unknown = null;
   try {
-    data = text ? JSON.parse(text) : null;
+    parsed = text ? (JSON.parse(text) as RpcOk | RpcErr) : null;
   } catch {
-    data = null;
+    parsed = null;
   }
 
   if (!r.ok) {
-    return NextResponse.json(
-      { ok: false, error: data?.message ?? text ?? `HTTP ${r.status}` },
-      { status: 500 }
-    );
+    const msg =
+      (isRpcErr(parsed) && typeof parsed.message === "string" && parsed.message) ||
+      (typeof text === "string" && text) ||
+      `HTTP ${r.status}`;
+
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 
+  const data = (parsed && typeof parsed === "object" ? (parsed as RpcOk) : {}) as RpcOk;
+
   // Return only safe aggregate fields we want for Scan.
-  // We’ll pass through anything that exists; missing fields become 0.
-  const findRate = Number(data?.find_rate ?? 0) || 0;
-  const avgFuel = Number(data?.avg_fuel_per_attempt ?? 0) || 0;
+  // We'll pass through anything that exists; missing fields become 0.
+  const findRate = Number((data as Record<string, unknown>)["find_rate"] ?? 0) || 0;
+  const avgFuel = Number((data as Record<string, unknown>)["avg_fuel_per_attempt"] ?? 0) || 0;
 
   return NextResponse.json({
     ok: true,

@@ -12,7 +12,17 @@ const SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 const TABLE_CLAIMS = "dd_treasure_claims";
 const TABLE_LEDGER = "dd_box_ledger";
+const TABLE_STATS = "stats_events";
 const TS_COL = "created_at";
+
+type WarningRow = { scope: string; message: string };
+type ClaimsUserRow = { user_id: string | number | null };
+type SumRow = { sum: number | null };
+
+function readSum(rows: SumRow[] | null | undefined): number {
+  const v = rows?.[0]?.sum ?? 0;
+  return Number(v ?? 0);
+}
 
 export async function GET() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -33,7 +43,6 @@ export async function GET() {
     .lt(TS_COL, endIso);
 
   // 2) Unique claimers in last 24h (fetch user_id list and count distinct in code)
-  // Supabase REST doesn't always support COUNT(DISTINCT ...) directly, so we do it safely here.
   const uniqueClaimersReq = supabase
     .from(TABLE_CLAIMS)
     .select("user_id")
@@ -55,26 +64,48 @@ export async function GET() {
     .lt(TS_COL, endIso)
     .eq("entry_type", "claim_reserve");
 
-  const [claims, uniqueClaimers, ledgerTotal, reserves] = await Promise.all([
-    claimsReq,
-    uniqueClaimersReq,
-    ledgerTotalReq,
-    reservesReq,
-  ]);
+  // 5) Money metrics from stats_events (last 24h)
+  const claimsValueUsdReq = supabase
+    .from(TABLE_STATS)
+    .select("reward_value_usd.sum()")
+    .gte(TS_COL, startIso)
+    .lt(TS_COL, endIso)
+    .eq("event", "dig_success");
 
-  const warnings: Array<{ scope: string; message: string }> = [];
+  const usdddSpentReq = supabase
+    .from(TABLE_STATS)
+    .select("usddd_cost.sum()")
+    .gte(TS_COL, startIso)
+    .lt(TS_COL, endIso)
+    .eq("event", "dig_success");
+
+  const [claims, uniqueClaimers, ledgerTotal, reserves, claimsValueUsd, usdddSpent] =
+    await Promise.all([
+      claimsReq,
+      uniqueClaimersReq,
+      ledgerTotalReq,
+      reservesReq,
+      claimsValueUsdReq,
+      usdddSpentReq,
+    ]);
+
+  const warnings: WarningRow[] = [];
 
   if (claims.error) warnings.push({ scope: "claims", message: claims.error.message });
   if (uniqueClaimers.error)
     warnings.push({ scope: "unique_claimers", message: uniqueClaimers.error.message });
   if (ledgerTotal.error)
     warnings.push({ scope: "ledger_total", message: ledgerTotal.error.message });
-  if (reserves.error)
-    warnings.push({ scope: "reserves", message: reserves.error.message });
+  if (reserves.error) warnings.push({ scope: "reserves", message: reserves.error.message });
+  if (claimsValueUsd.error)
+    warnings.push({ scope: "claims_value_usd", message: claimsValueUsd.error.message });
+  if (usdddSpent.error) warnings.push({ scope: "usddd_spent", message: usdddSpent.error.message });
 
-  const uniqueCount = uniqueClaimers.data
-    ? new Set(uniqueClaimers.data.map((r: any) => String(r.user_id))).size
-    : 0;
+  const uniqueRows = (uniqueClaimers.data ?? []) as ClaimsUserRow[];
+  const uniqueCount = new Set(uniqueRows.map((r) => String(r.user_id ?? ""))).size;
+
+  const claimsValueRows = (claimsValueUsd.data ?? []) as SumRow[];
+  const usdddSpentRows = (usdddSpent.data ?? []) as SumRow[];
 
   return NextResponse.json({
     window: { start: startIso, end: endIso, hours: 24 },
@@ -83,6 +114,10 @@ export async function GET() {
       unique_claimers: uniqueCount,
       ledger_entries: ledgerTotal.count ?? 0,
       claim_reserves: reserves.count ?? 0,
+    },
+    money: {
+      claims_value_usd: readSum(claimsValueRows),
+      usddd_spent: readSum(usdddSpentRows),
     },
     warnings: warnings.length ? warnings : undefined,
     schema_assumption: { timestamp_column: TS_COL },

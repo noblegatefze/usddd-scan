@@ -11,6 +11,10 @@ type ActivityResp = {
     ledger_entries: number;
     claim_reserves: number;
   };
+  money?: {
+    claims_value_usd: number;
+    usddd_spent: number;
+  };
   warnings?: Array<{ scope: string; message: string }>;
   schema_assumption?: { timestamp_column?: string };
 };
@@ -76,6 +80,24 @@ const LINKS = {
   docs: "https://github.com/noblegatefze/digdug-whitepaper",
 };
 
+function getErrMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return "Failed to load";
+  }
+}
+
+function readJsonError(json: unknown, fallback: string): string {
+  if (json && typeof json === "object" && "error" in json) {
+    const v = (json as { error?: unknown }).error;
+    if (typeof v === "string" && v.trim()) return v;
+  }
+  return fallback;
+}
+
 function NetworkActivityCard() {
   const [data, setData] = React.useState<ActivityResp | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -86,11 +108,11 @@ function NetworkActivityCard() {
     (async () => {
       try {
         const res = await fetch("/api/activity/24h", { cache: "no-store" });
-        const json = (await res.json()) as any;
-        if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+        const json: unknown = await res.json();
+        if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         if (!cancelled) setData(json as ActivityResp);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Failed to load");
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
       }
     })();
 
@@ -116,10 +138,11 @@ function NetworkActivityCard() {
   }
 
   const c = data.counts;
+  const m = data.money ?? { claims_value_usd: 0, usddd_spent: 0 };
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 text-[13px]">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
         <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
           <div className="text-[12px] text-slate-400">Claims (24h)</div>
           <div className="mt-1 text-base font-semibold">{fmt(c.claims)}</div>
@@ -143,6 +166,16 @@ function NetworkActivityCard() {
             </div>
             <div className="text-[11px] text-slate-500">window: {data.window.hours}h</div>
           </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+          <div className="text-[12px] text-slate-400">Claim value (24h)</div>
+          <div className="mt-1 text-base font-semibold">{fmtUsd(m.claims_value_usd ?? 0)}</div>
+        </div>
+
+        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+          <div className="text-[12px] text-slate-400">USDDD spent (24h)</div>
+          <div className="mt-1 text-base font-semibold">{fmtDec(m.usddd_spent ?? 0)}</div>
         </div>
       </div>
 
@@ -172,12 +205,15 @@ function LatestGoldenFindsTable() {
     (async () => {
       try {
         const res = await fetch("/api/golden-finds/latest?limit=5", { cache: "no-store" });
-        const json = (await res.json()) as any;
-        if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
-        const dataRows = (json?.rows ?? []) as GoldenFindRow[];
+        const json: unknown = await res.json();
+        if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
+        const dataRows =
+          json && typeof json === "object" && "rows" in json
+            ? (((json as { rows?: unknown }).rows ?? []) as GoldenFindRow[])
+            : ([] as GoldenFindRow[]);
         if (!cancelled) setRows(dataRows);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Failed to load");
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
       }
     })();
 
@@ -243,12 +279,15 @@ function BoxBalancesTable() {
     (async () => {
       try {
         const res = await fetch("/api/boxes/balances?limit=10", { cache: "no-store" });
-        const json = (await res.json()) as any;
-        if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
-        const dataRows = (json?.rows ?? []) as BoxBalanceRow[];
+        const json: unknown = await res.json();
+        if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
+        const dataRows =
+          json && typeof json === "object" && "rows" in json
+            ? (((json as { rows?: unknown }).rows ?? []) as BoxBalanceRow[])
+            : ([] as BoxBalanceRow[]);
         if (!cancelled) setRows(dataRows);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Failed to load");
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
       }
     })();
 
@@ -324,12 +363,15 @@ function GoldenWinnersLeaderboard() {
     (async () => {
       try {
         const res = await fetch("/api/leaderboards/golden-winners?limit=5", { cache: "no-store" });
-        const json = (await res.json()) as any;
-        if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
-        const dataRows = (json?.rows ?? []) as GoldenWinnersRow[];
+        const json: unknown = await res.json();
+        if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
+        const dataRows =
+          json && typeof json === "object" && "rows" in json
+            ? (((json as { rows?: unknown }).rows ?? []) as GoldenWinnersRow[])
+            : ([] as GoldenWinnersRow[]);
         if (!cancelled) setRows(dataRows);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Failed to load");
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
       }
     })();
 

@@ -12,6 +12,12 @@ const SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 const TABLE_GOLDEN_EVENTS = "dd_tg_golden_events";
 
+type GoldenEventRow = {
+  terminal_username: string | null;
+  usd_value: number | string | null;
+  created_at: string | null;
+};
+
 // Keep masking consistent with scan (ASCII only)
 function maskUsername(u: string | null | undefined) {
   const raw = (u ?? "").trim();
@@ -24,6 +30,15 @@ function maskUsername(u: string | null | undefined) {
   const s = raw.replace(/\s+/g, " ");
   if (s.length <= 6) return `${s.slice(0, 1)}...${s.slice(-1)}`;
   return `${s.slice(0, 3)}...${s.slice(-3)}`;
+}
+
+function toUsd(v: number | string | null | undefined): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 }
 
 export async function GET(req: Request) {
@@ -51,15 +66,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const byUser: Record<
-    string,
-    { winner: string; wins: number; usd_total: number }
-  > = {};
+  const typed = (data ?? []) as GoldenEventRow[];
 
-  for (const r of data ?? []) {
-    const winner = maskUsername((r as any).terminal_username);
+  const byUser: Record<string, { winner: string; wins: number; usd_total: number }> = {};
+
+  for (const r of typed) {
+    const winner = maskUsername(r.terminal_username);
     const key = winner;
-    const usd = Number((r as any).usd_value ?? 0) || 0;
+    const usd = toUsd(r.usd_value);
 
     if (!byUser[key]) byUser[key] = { winner, wins: 0, usd_total: 0 };
     byUser[key].wins += 1;
