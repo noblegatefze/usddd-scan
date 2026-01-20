@@ -12,17 +12,12 @@ const SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 const TABLE_CLAIMS = "dd_treasure_claims";
 const TABLE_LEDGER = "dd_box_ledger";
-const TABLE_STATS = "stats_events";
 const TS_COL = "created_at";
+
+const RPC_MONEY_24H = "scan_activity_money_24h";
 
 type WarningRow = { scope: string; message: string };
 type ClaimsUserRow = { user_id: string | number | null };
-type SumRow = { sum: number | null };
-
-function readSum(rows: SumRow[] | null | undefined): number {
-  const v = rows?.[0]?.sum ?? 0;
-  return Number(v ?? 0);
-}
 
 export async function GET() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -64,30 +59,19 @@ export async function GET() {
     .lt(TS_COL, endIso)
     .eq("entry_type", "claim_reserve");
 
-  // 5) Money metrics from stats_events (last 24h)
-  const claimsValueUsdReq = supabase
-    .from(TABLE_STATS)
-    .select("reward_value_usd.sum()")
-    .gte(TS_COL, startIso)
-    .lt(TS_COL, endIso)
-    .eq("event", "dig_success");
+  // 5) Money metrics via SQL RPC (aggregates not allowed via REST on this project)
+  const moneyReq = supabase.rpc(RPC_MONEY_24H, {
+    start_ts: startIso,
+    end_ts: endIso,
+  });
 
-  const usdddSpentReq = supabase
-    .from(TABLE_STATS)
-    .select("usddd_cost.sum()")
-    .gte(TS_COL, startIso)
-    .lt(TS_COL, endIso)
-    .eq("event", "dig_success");
-
-  const [claims, uniqueClaimers, ledgerTotal, reserves, claimsValueUsd, usdddSpent] =
-    await Promise.all([
-      claimsReq,
-      uniqueClaimersReq,
-      ledgerTotalReq,
-      reservesReq,
-      claimsValueUsdReq,
-      usdddSpentReq,
-    ]);
+  const [claims, uniqueClaimers, ledgerTotal, reserves, money] = await Promise.all([
+    claimsReq,
+    uniqueClaimersReq,
+    ledgerTotalReq,
+    reservesReq,
+    moneyReq,
+  ]);
 
   const warnings: WarningRow[] = [];
 
@@ -97,15 +81,16 @@ export async function GET() {
   if (ledgerTotal.error)
     warnings.push({ scope: "ledger_total", message: ledgerTotal.error.message });
   if (reserves.error) warnings.push({ scope: "reserves", message: reserves.error.message });
-  if (claimsValueUsd.error)
-    warnings.push({ scope: "claims_value_usd", message: claimsValueUsd.error.message });
-  if (usdddSpent.error) warnings.push({ scope: "usddd_spent", message: usdddSpent.error.message });
+  if (money.error) warnings.push({ scope: "money", message: money.error.message });
 
   const uniqueRows = (uniqueClaimers.data ?? []) as ClaimsUserRow[];
   const uniqueCount = new Set(uniqueRows.map((r) => String(r.user_id ?? ""))).size;
 
-  const claimsValueRows = (claimsValueUsd.data ?? []) as SumRow[];
-  const usdddSpentRows = (usdddSpent.data ?? []) as SumRow[];
+  const moneyObj =
+    (money.data && typeof money.data === "object" ? (money.data as Record<string, unknown>) : null) ?? null;
+
+  const claimsValueUsd = Number(moneyObj?.claims_value_usd ?? 0) || 0;
+  const usdddSpent = Number(moneyObj?.usddd_spent ?? 0) || 0;
 
   return NextResponse.json({
     window: { start: startIso, end: endIso, hours: 24 },
@@ -116,8 +101,8 @@ export async function GET() {
       claim_reserves: reserves.count ?? 0,
     },
     money: {
-      claims_value_usd: readSum(claimsValueRows),
-      usddd_spent: readSum(usdddSpentRows),
+      claims_value_usd: claimsValueUsd,
+      usddd_spent: usdddSpent,
     },
     warnings: warnings.length ? warnings : undefined,
     schema_assumption: { timestamp_column: TS_COL },
