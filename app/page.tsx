@@ -42,6 +42,12 @@ type GoldenWinnersRow = {
   usd_total: number;
 };
 
+type BuildMeta = {
+  version: string;
+  build: string;
+  deployed_at: string;
+};
+
 function fmt(n: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 }
@@ -416,6 +422,28 @@ function GoldenWinnersLeaderboard() {
 }
 
 export default function Home() {
+  const [meta, setMeta] = React.useState<BuildMeta | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/meta/build", { cache: "no-store" });
+        const json: unknown = await res.json();
+        if (!cancelled && json && typeof json === "object") {
+          setMeta(json as BuildMeta);
+        }
+      } catch {
+        // ignore meta errors
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#0b0f14] text-slate-200">
       <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-[#0b0f14]/90 backdrop-blur">
@@ -450,11 +478,11 @@ export default function Home() {
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[12px] text-slate-400">
             <span>Phase: Zero</span>
             <span className="text-slate-600">·</span>
-            <span>Version: v0.1.16.0</span>
+            <span>Version: {meta?.version ?? "—"}</span>
             <span className="text-slate-600">·</span>
-            <span>Build: f72640a</span>
+            <span>Build: {meta?.build ?? "—"}</span>
             <span className="text-slate-600">·</span>
-            <span>Updated: 12s ago</span>
+            <span>Updated</span>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <a
