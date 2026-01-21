@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const VERSION = "v0.1.16.7"; // 👈 keep this in sync with digdug.do
+const VERSION = "v0.1.16.8"; // 👈 keep this in sync with digdug.do
 
 function pickBuildSha(): string {
   // Vercel provides different vars depending on environment
