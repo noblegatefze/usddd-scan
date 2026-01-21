@@ -139,17 +139,18 @@ function nnum(v: unknown): number | null {
 function GlobalPulseStrip() {
   const [sessions, setSessions] = React.useState<number | null>(null);
   const [activeNow5m, setActiveNow5m] = React.useState<number | null>(null);
-  const [dailyDiggersToday, setDailyDiggersToday] = React.useState<number | null>(null);
   const [goldenTxt, setGoldenTxt] = React.useState<string>("—");
-  const [utcResetTxt, setUtcResetTxt] = React.useState<string>(formatHMS(msUntilNextUtcReset()));
+  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("—"); // IMPORTANT: avoid SSR/CSR mismatch
 
-  // Update UTC reset countdown locally (safe)
+  // Update UTC reset countdown (safe) — only on client
   React.useEffect(() => {
-    const t = setInterval(() => setUtcResetTxt(formatHMS(msUntilNextUtcReset())), 1000);
+    const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
+    tick(); // set immediately after mount
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Stats summary (sessions / active / daily diggers)
+  // Stats summary (sessions / active now)
   React.useEffect(() => {
     let cancelled = false;
 
@@ -159,8 +160,6 @@ function GlobalPulseStrip() {
         const json: any = await res.json();
         if (!res.ok || !json) return;
 
-        // Try a few likely shapes without assuming exact schema.
-        // We only show what we can parse safely.
         const s =
           nnum(json?.sessions) ??
           nnum(json?.network?.sessions) ??
@@ -175,18 +174,9 @@ function GlobalPulseStrip() {
           nnum(json?.counts?.active_now) ??
           null;
 
-        const d =
-          nnum(json?.daily_active) ??
-          nnum(json?.daily_diggers) ??
-          nnum(json?.diggers_today) ??
-          nnum(json?.network?.daily_active) ??
-          nnum(json?.counts?.daily_active) ??
-          null;
-
         if (cancelled) return;
         setSessions(s);
         setActiveNow5m(a);
-        setDailyDiggersToday(d);
       } catch {
         // ignore
       }
@@ -226,23 +216,22 @@ function GlobalPulseStrip() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-2">
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+      {/* Mobile-first grid so it doesn't look messy */}
+      <div className="grid grid-cols-2 gap-2 text-[11px] md:flex md:flex-wrap md:items-center md:gap-2">
         <span className={pill}>
           Sessions: <span className="font-semibold">{sessions == null ? "—" : fmt(sessions)}</span>
         </span>
+
         <span className={pill}>
           Active now (5m): <span className="font-semibold">{activeNow5m == null ? "—" : fmt(activeNow5m)}</span>
-        </span>
-        <span className={pill}>
-          Daily diggers (today):{" "}
-          <span className="font-semibold">{dailyDiggersToday == null ? "—" : fmt(dailyDiggersToday)}</span>
         </span>
 
         <span className="rounded-md border border-amber-900/40 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-200">
           Golden today: <span className="font-semibold">{goldenTxt}</span>
         </span>
 
-        <span className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+        {/* Full-width on mobile; right-aligned on desktop */}
+        <span className="col-span-2 md:col-span-1 md:ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
           UTC reset in: <span className="font-semibold text-slate-200">{utcResetTxt}</span>
         </span>
       </div>
