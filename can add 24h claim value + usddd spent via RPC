@@ -1,0 +1,100 @@
+[1mdiff --git a/app/api/activity/24h/route.ts b/app/api/activity/24h/route.ts[m
+[1mindex 271d5de..7702468 100644[m
+[1m--- a/app/api/activity/24h/route.ts[m
+[1m+++ b/app/api/activity/24h/route.ts[m
+[36m@@ -12,17 +12,12 @@[m [mconst SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");[m
+ [m
+ const TABLE_CLAIMS = "dd_treasure_claims";[m
+ const TABLE_LEDGER = "dd_box_ledger";[m
+[31m-const TABLE_STATS = "stats_events";[m
+ const TS_COL = "created_at";[m
+ [m
+[32m+[m[32mconst RPC_MONEY_24H = "scan_activity_money_24h";[m
+[32m+[m
+ type WarningRow = { scope: string; message: string };[m
+ type ClaimsUserRow = { user_id: string | number | null };[m
+[31m-type SumRow = { sum: number | null };[m
+[31m-[m
+[31m-function readSum(rows: SumRow[] | null | undefined): number {[m
+[31m-  const v = rows?.[0]?.sum ?? 0;[m
+[31m-  return Number(v ?? 0);[m
+[31m-}[m
+ [m
+ export async function GET() {[m
+   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {[m
+[36m@@ -64,30 +59,19 @@[m [mexport async function GET() {[m
+     .lt(TS_COL, endIso)[m
+     .eq("entry_type", "claim_reserve");[m
+ [m
+[31m-  // 5) Money metrics from stats_events (last 24h)[m
+[31m-  const claimsValueUsdReq = supabase[m
+[31m-    .from(TABLE_STATS)[m
+[31m-    .select("reward_value_usd.sum()")[m
+[31m-    .gte(TS_COL, startIso)[m
+[31m-    .lt(TS_COL, endIso)[m
+[31m-    .eq("event", "dig_success");[m
+[32m+[m[32m  // 5) Money metrics via SQL RPC (aggregates not allowed via REST on this project)[m
+[32m+[m[32m  const moneyReq = supabase.rpc(RPC_MONEY_24H, {[m
+[32m+[m[32m    start_ts: startIso,[m
+[32m+[m[32m    end_ts: endIso,[m
+[32m+[m[32m  });[m
+ [m
+[31m-  const usdddSpentReq = supabase[m
+[31m-    .from(TABLE_STATS)[m
+[31m-    .select("usddd_cost.sum()")[m
+[31m-    .gte(TS_COL, startIso)[m
+[31m-    .lt(TS_COL, endIso)[m
+[31m-    .eq("event", "dig_success");[m
+[31m-[m
+[31m-  const [claims, uniqueClaimers, ledgerTotal, reserves, claimsValueUsd, usdddSpent] =[m
+[31m-    await Promise.all([[m
+[31m-      claimsReq,[m
+[31m-      uniqueClaimersReq,[m
+[31m-      ledgerTotalReq,[m
+[31m-      reservesReq,[m
+[31m-      claimsValueUsdReq,[m
+[31m-      usdddSpentReq,[m
+[31m-    ]);[m
+[32m+[m[32m  const [claims, uniqueClaimers, ledgerTotal, reserves, money] = await Promise.all([[m
+[32m+[m[32m    claimsReq,[m
+[32m+[m[32m    uniqueClaimersReq,[m
+[32m+[m[32m    ledgerTotalReq,[m
+[32m+[m[32m    reservesReq,[m
+[32m+[m[32m    moneyReq,[m
+[32m+[m[32m  ]);[m
+ [m
+   const warnings: WarningRow[] = [];[m
+ [m
+[36m@@ -97,15 +81,16 @@[m [mexport async function GET() {[m
+   if (ledgerTotal.error)[m
+     warnings.push({ scope: "ledger_total", message: ledgerTotal.error.message });[m
+   if (reserves.error) warnings.push({ scope: "reserves", message: reserves.error.message });[m
+[31m-  if (claimsValueUsd.error)[m
+[31m-    warnings.push({ scope: "claims_value_usd", message: claimsValueUsd.error.message });[m
+[31m-  if (usdddSpent.error) warnings.push({ scope: "usddd_spent", message: usdddSpent.error.message });[m
+[32m+[m[32m  if (money.error) warnings.push({ scope: "money", message: money.error.message });[m
+ [m
+   const uniqueRows = (uniqueClaimers.data ?? []) as ClaimsUserRow[];[m
+   const uniqueCount = new Set(uniqueRows.map((r) => String(r.user_id ?? ""))).size;[m
+ [m
+[31m-  const claimsValueRows = (claimsValueUsd.data ?? []) as SumRow[];[m
+[31m-  const usdddSpentRows = (usdddSpent.data ?? []) as SumRow[];[m
+[32m+[m[32m  const moneyObj =[m
+[32m+[m[32m    (money.data && typeof money.data === "object" ? (money.data as Record<string, unknown>) : null) ?? null;[m
+[32m+[m
+[32m+[m[32m  const claimsValueUsd = Number(moneyObj?.claims_value_usd ?? 0) || 0;[m
+[32m+[m[32m  const usdddSpent = Number(moneyObj?.usddd_spent ?? 0) || 0;[m
+ [m
+   return NextResponse.json({[m
+     window: { start: startIso, end: endIso, hours: 24 },[m
+[36m@@ -116,8 +101,8 @@[m [mexport async function GET() {[m
+       claim_reserves: reserves.count ?? 0,[m
+     },[m
+     money: {[m
+[31m-      claims_value_usd: readSum(claimsValueRows),[m
+[31m-      usddd_spent: readSum(usdddSpentRows),[m
+[32m+[m[32m      claims_value_usd: claimsValueUsd,[m
+[32m+[m[32m      usddd_spent: usdddSpent,[m
+     },[m
+     warnings: warnings.length ? warnings : undefined,[m
+     schema_assumption: { timestamp_column: TS_COL },[m

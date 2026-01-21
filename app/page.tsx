@@ -104,6 +104,152 @@ function readJsonError(json: unknown, fallback: string): string {
   return fallback;
 }
 
+function msUntilNextUtcReset(now = new Date()): number {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  const next = new Date(Date.UTC(y, m, d + 1, 0, 0, 0, 0));
+  return Math.max(0, next.getTime() - now.getTime());
+}
+
+function formatHMS(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const rem = total % 3600;
+  const min = Math.floor(rem / 60);
+  const sec = rem % 60;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function nnum(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * GLOBAL PULSE (safe)
+ * - Sessions
+ * - Active now (5m)
+ * - Daily diggers (today)
+ * - Golden today X/5
+ * - UTC reset in (safe)
+ *
+ * IMPORTANT: No "next allowed" / timing window shown (anti-sniping).
+ */
+function GlobalPulseStrip() {
+  const [sessions, setSessions] = React.useState<number | null>(null);
+  const [activeNow5m, setActiveNow5m] = React.useState<number | null>(null);
+  const [dailyDiggersToday, setDailyDiggersToday] = React.useState<number | null>(null);
+  const [goldenTxt, setGoldenTxt] = React.useState<string>("—");
+  const [utcResetTxt, setUtcResetTxt] = React.useState<string>(formatHMS(msUntilNextUtcReset()));
+
+  // Update UTC reset countdown locally (safe)
+  React.useEffect(() => {
+    const t = setInterval(() => setUtcResetTxt(formatHMS(msUntilNextUtcReset())), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Stats summary (sessions / active / daily diggers)
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/stats/summary", { cache: "no-store" });
+        const json: any = await res.json();
+        if (!res.ok || !json) return;
+
+        // Try a few likely shapes without assuming exact schema.
+        // We only show what we can parse safely.
+        const s =
+          nnum(json?.sessions) ??
+          nnum(json?.network?.sessions) ??
+          nnum(json?.counts?.sessions) ??
+          null;
+
+        const a =
+          nnum(json?.active_now_5m) ??
+          nnum(json?.active_now) ??
+          nnum(json?.network?.active_now_5m) ??
+          nnum(json?.counts?.active_now_5m) ??
+          nnum(json?.counts?.active_now) ??
+          null;
+
+        const d =
+          nnum(json?.daily_active) ??
+          nnum(json?.daily_diggers) ??
+          nnum(json?.diggers_today) ??
+          nnum(json?.network?.daily_active) ??
+          nnum(json?.counts?.daily_active) ??
+          null;
+
+        if (cancelled) return;
+        setSessions(s);
+        setActiveNow5m(a);
+        setDailyDiggersToday(d);
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Golden today X/5 (from scan API route)
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/golden/today", { cache: "no-store" });
+        const json: any = await res.json();
+        if (!res.ok || !json?.ok) return;
+
+        const count = nnum(json?.count) ?? 0;
+        const cap = nnum(json?.cap) ?? 5;
+
+        if (cancelled) return;
+        setGoldenTxt(`${count}/${cap}`);
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pill = "rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200";
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <span className={pill}>
+          Sessions: <span className="font-semibold">{sessions == null ? "—" : fmt(sessions)}</span>
+        </span>
+        <span className={pill}>
+          Active now (5m): <span className="font-semibold">{activeNow5m == null ? "—" : fmt(activeNow5m)}</span>
+        </span>
+        <span className={pill}>
+          Daily diggers (today):{" "}
+          <span className="font-semibold">{dailyDiggersToday == null ? "—" : fmt(dailyDiggersToday)}</span>
+        </span>
+
+        <span className="rounded-md border border-amber-900/40 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-200">
+          Golden today: <span className="font-semibold">{goldenTxt}</span>
+        </span>
+
+        <span className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+          UTC reset in: <span className="font-semibold text-slate-200">{utcResetTxt}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function NetworkActivityCard() {
   const [data, setData] = React.useState<ActivityResp | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -510,6 +656,11 @@ export default function Home() {
                 Docs
               </a>
             </div>
+          </div>
+
+          {/* GLOBAL PULSE (safe) */}
+          <div className="border-t border-slate-800/40">
+            <GlobalPulseStrip />
           </div>
         </div>
 
