@@ -121,120 +121,45 @@ function formatHMS(ms: number): string {
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-function nnum(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
- * GLOBAL PULSE (safe)
- * - Sessions
- * - Active now (5m)
- * - Daily diggers (today)
- * - Golden today X/5
- * - UTC reset in (safe)
- *
- * IMPORTANT: No "next allowed" / timing window shown (anti-sniping).
- */
-function GlobalPulseStrip() {
-  const [sessions, setSessions] = React.useState<number | null>(null);
-  const [activeNow5m, setActiveNow5m] = React.useState<number | null>(null);
+function GoldenPulsePills({ className = "" }: { className?: string }) {
   const [goldenTxt, setGoldenTxt] = React.useState<string>("—");
-  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("—"); // IMPORTANT: avoid SSR/CSR mismatch
+  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("—"); // avoid hydration mismatch
 
-  // Update UTC reset countdown (safe) — only on client
   React.useEffect(() => {
     const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
-    tick(); // set immediately after mount
+    tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Stats summary (sessions / active now)
   React.useEffect(() => {
     let cancelled = false;
-
-    (async () => {
-      try {
-        const res = await fetch("/api/stats/summary", { cache: "no-store" });
-        const json: any = await res.json();
-        if (!res.ok || !json) return;
-
-        const s =
-          nnum(json?.sessions) ??
-          nnum(json?.network?.sessions) ??
-          nnum(json?.counts?.sessions) ??
-          null;
-
-        const a =
-          nnum(json?.active_now_5m) ??
-          nnum(json?.active_now) ??
-          nnum(json?.network?.active_now_5m) ??
-          nnum(json?.counts?.active_now_5m) ??
-          nnum(json?.counts?.active_now) ??
-          null;
-
-        if (cancelled) return;
-        setSessions(s);
-        setActiveNow5m(a);
-      } catch {
-        // ignore
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Golden today X/5 (from scan API route)
-  React.useEffect(() => {
-    let cancelled = false;
-
     (async () => {
       try {
         const res = await fetch("/api/golden/today", { cache: "no-store" });
         const json: any = await res.json();
         if (!res.ok || !json?.ok) return;
-
-        const count = nnum(json?.count) ?? 0;
-        const cap = nnum(json?.cap) ?? 5;
-
-        if (cancelled) return;
-        setGoldenTxt(`${count}/${cap}`);
+        const count = Number(json?.count ?? 0);
+        const cap = Number(json?.cap ?? 5);
+        if (!Number.isFinite(count) || !Number.isFinite(cap) || cap <= 0) return;
+        if (!cancelled) setGoldenTxt(`${count}/${cap}`);
       } catch {
         // ignore
       }
     })();
-
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const pill = "rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200";
-
   return (
-    <div className="mx-auto max-w-6xl px-4 py-2">
-      {/* Mobile-first grid so it doesn't look messy */}
-      <div className="grid grid-cols-2 gap-2 text-[11px] md:flex md:flex-wrap md:items-center md:gap-2">
-        <span className={pill}>
-          Sessions: <span className="font-semibold">{sessions == null ? "—" : fmt(sessions)}</span>
-        </span>
-
-        <span className={pill}>
-          Active now (5m): <span className="font-semibold">{activeNow5m == null ? "—" : fmt(activeNow5m)}</span>
-        </span>
-
-        <span className="rounded-md border border-amber-900/40 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-200">
-          Golden today: <span className="font-semibold">{goldenTxt}</span>
-        </span>
-
-        {/* Full-width on mobile; right-aligned on desktop */}
-        <span className="col-span-2 md:col-span-1 md:ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
-          UTC reset in: <span className="font-semibold text-slate-200">{utcResetTxt}</span>
-        </span>
-      </div>
+    <div className={`flex items-center gap-2 ${className}`}>
+      <span className="rounded-md border border-amber-900/40 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-200">
+        Golden today: <span className="font-semibold">{goldenTxt}</span>
+      </span>
+      <span className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+        UTC reset in: <span className="font-semibold text-slate-200">{utcResetTxt}</span>
+      </span>
     </div>
   );
 }
@@ -470,15 +395,9 @@ function BoxBalancesTable() {
               rows.map((r) => (
                 <tr key={r.box} className="border-b border-slate-800/40">
                   <td className="py-2 pr-2 font-mono truncate">{r.box}</td>
-                  <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">
-                    {fmtDec(r.deposited)}
-                  </td>
-                  <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">
-                    {fmtDec(r.claimed)}
-                  </td>
-                  <td className="hidden md:table-cell py-2 pr-2 text-right text-slate-300">
-                    {fmtDec(r.withdrawn)}
-                  </td>
+                  <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.deposited)}</td>
+                  <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.claimed)}</td>
+                  <td className="hidden md:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.withdrawn)}</td>
                   <td className="py-2 text-right tabular-nums">{fmtDec(r.remaining)}</td>
                 </tr>
               ))
@@ -646,16 +565,15 @@ export default function Home() {
               </a>
             </div>
           </div>
-
-          {/* GLOBAL PULSE (safe) */}
-          <div className="border-t border-slate-800/40">
-            <GlobalPulseStrip />
-          </div>
         </div>
 
+        {/* Mobile search + pulse directly beneath (same line) */}
         <div className="md:hidden border-t border-slate-800/40 px-4 py-2">
           <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
             Search claim code / box / user…
+          </div>
+          <div className="mt-2 flex justify-between">
+            <GoldenPulsePills />
           </div>
         </div>
       </header>
@@ -671,16 +589,22 @@ export default function Home() {
           </section>
 
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-slate-200">Latest Golden Finds</h2>
-              <a
-                href={LINKS.terminal}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] text-slate-400 hover:text-slate-200"
-              >
-                View all
-              </a>
+
+              <div className="flex items-center gap-2">
+                <div className="hidden md:flex">
+                  <GoldenPulsePills />
+                </div>
+                <a
+                  href={LINKS.terminal}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-slate-400 hover:text-slate-200"
+                >
+                  View all
+                </a>
+              </div>
             </div>
 
             <LatestGoldenFindsTable />
