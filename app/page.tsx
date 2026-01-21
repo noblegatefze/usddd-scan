@@ -165,7 +165,7 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
 }
 
 function NetworkActivityCard() {
-  const [data, setData] = React.useState<ActivityResp | null>(null);
+  const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -176,7 +176,7 @@ function NetworkActivityCard() {
         const res = await fetch("/api/activity/24h", { cache: "no-store" });
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
-        if (!cancelled) setData(json as ActivityResp);
+        if (!cancelled) setData(json);
       } catch (e: unknown) {
         if (!cancelled) setErr(getErrMsg(e));
       }
@@ -186,6 +186,13 @@ function NetworkActivityCard() {
       cancelled = true;
     };
   }, []);
+
+  const fmtPct2 = (n: number) => `${(Number.isFinite(n) ? n : 0).toFixed(2)}%`;
+  const fmtSigned = (n: number) => {
+    const v = Number.isFinite(n) ? n : 0;
+    const sign = v > 0 ? "+" : "";
+    return `${sign}${v.toFixed(3)}`;
+  };
 
   if (err) {
     return (
@@ -203,60 +210,135 @@ function NetworkActivityCard() {
     );
   }
 
-  const c = data.counts;
+  const c = data.counts ?? {};
   const m = data.money ?? { claims_value_usd: 0, usddd_spent: 0 };
+  const model = data.model ?? {};
+
+  const rewardEff = Number(model.reward_efficiency_usd_per_usddd ?? 0) || 0;
+  const accrualPotential = Number(model.accrual_potential_pct ?? 0) || 0;
+  const netPerf = Number(model.network_performance_pct ?? 0) || 0;
+  const effDelta = Number(model.efficiency_delta_usd_per_usddd ?? 0) || 0;
+
+  // subtle value styling (protocol tone)
+  const perfTone =
+    netPerf >= 80 ? "text-emerald-300" : netPerf >= 55 ? "text-slate-200" : "text-amber-300";
+  const deltaTone = effDelta > 0 ? "text-emerald-300" : effDelta < 0 ? "text-amber-300" : "text-slate-200";
+
+  const Tile = ({
+    title,
+    desc,
+    value,
+    valueClassName,
+  }: {
+    title: string;
+    desc: string;
+    value: React.ReactNode;
+    valueClassName?: string;
+  }) => (
+    <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+      <div className="text-[12px] text-slate-200">{title}</div>
+      <div className={`mt-1 text-base font-semibold ${valueClassName ?? ""}`}>{value}</div>
+      <div className="mt-1 text-[11px] leading-snug text-slate-500">{desc}</div>
+    </div>
+  );
 
   return (
     <div className="space-y-3">
+      {/* 3×3 on desktop, 2 columns on mobile */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
-        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-          <div className="text-[12px] text-slate-400">Claims (24h)</div>
-          <div className="mt-1 text-base font-semibold">{fmt(c.claims)}</div>
-        </div>
+        {/* Row 1 */}
+        <Tile
+          title="Protocol Actions (24h)"
+          desc="Total protocol operations processed."
+          value={fmt(c.protocol_actions ?? 0)}
+        />
+        <Tile
+          title="Sessions (24h)"
+          desc="Session starts recorded by the protocol."
+          value={fmt(c.sessions_24h ?? 0)}
+        />
+        <Tile
+          title="Claims Executed (24h)"
+          desc="Successful claim executions."
+          value={fmt(c.claims_executed ?? 0)}
+        />
 
-        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-          <div className="text-[12px] text-slate-400">Unique claimers (24h)</div>
-          <div className="mt-1 text-base font-semibold">{fmt(c.unique_claimers)}</div>
-        </div>
+        {/* Row 2 */}
+        <Tile
+          title="USDDD Utilized (24h)"
+          desc="USDDD consumed by protocol activity."
+          value={fmtDec(m.usddd_spent ?? 0)}
+        />
+        <Tile
+          title="Value Distributed (24h)"
+          desc="USD value distributed by the protocol."
+          value={fmtUsd(m.claims_value_usd ?? 0)}
+        />
+        <Tile
+          title="Reward Efficiency (24h)"
+          desc="USD value per 1 USDDD utilized."
+          value={
+            <span>
+              {fmtUsd(rewardEff)} <span className="text-[12px] text-slate-400">/ USDDD</span>
+            </span>
+          }
+        />
 
-        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-          <div className="text-[12px] text-slate-400">Ledger entries (24h)</div>
-          <div className="mt-1 text-base font-semibold">{fmt(c.ledger_entries)}</div>
-        </div>
-
-        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[12px] text-slate-400">Claim reserves (24h)</div>
-              <div className="mt-1 text-base font-semibold">{fmt(c.claim_reserves)}</div>
-            </div>
-            <div className="text-[11px] text-slate-500">window: {data.window.hours}h</div>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-          <div className="text-[12px] text-slate-400">Claim value (24h)</div>
-          <div className="mt-1 text-base font-semibold">{fmtUsd(m.claims_value_usd ?? 0)}</div>
-        </div>
-
-        <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-          <div className="text-[12px] text-slate-400">USDDD spent (24h)</div>
-          <div className="mt-1 text-base font-semibold">{fmtDec(m.usddd_spent ?? 0)}</div>
-        </div>
+        {/* Row 3 */}
+        <Tile
+          title="Accrual Potential"
+          desc="Derived from efficiency (× 3%)."
+          value={fmtPct2(accrualPotential)}
+        />
+        <Tile
+          title="Network Performance"
+          desc="Efficiency normalized to protocol scale."
+          value={fmtPct2(netPerf)}
+          valueClassName={perfTone}
+        />
+        <Tile
+          title="Efficiency Delta (24h)"
+          desc="Change vs previous 24h efficiency."
+          value={
+            <span>
+              {fmtSigned(effDelta)} <span className="text-[12px] text-slate-400">$/USDDD</span>
+            </span>
+          }
+          valueClassName={deltaTone}
+        />
       </div>
 
-      {data.warnings && data.warnings.length > 0 && (
-        <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
-          <div className="font-semibold text-amber-200/90">Warnings</div>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            {data.warnings.map((w, i) => (
-              <li key={i}>
-                <span className="text-amber-200/70">{w.scope}:</span> {w.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Footer row inside the card */}
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <div className="text-[11px] text-slate-500">Accrual figures are protocol-defined and observational.</div>
+
+        <button
+          type="button"
+          disabled
+          className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-400 opacity-70 cursor-not-allowed"
+          title="Coming soon"
+        >
+          Fund Network
+        </button>
+      </div>
+
+      {/* Warnings (only show if non-empty messages) */}
+      {data.warnings &&
+        Array.isArray(data.warnings) &&
+        data.warnings.some((w: any) => (w?.message ?? "").trim().length) && (
+          <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
+            <div className="font-semibold text-amber-200/90">Warnings</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {data.warnings
+                .filter((w: any) => (w?.message ?? "").trim().length)
+                .map((w: any, i: number) => (
+                  <li key={i}>
+                    <span className="text-amber-200/70">{w.scope}:</span> {w.message}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
     </div>
   );
 }
@@ -270,7 +352,7 @@ function LatestGoldenFindsTable() {
 
     (async () => {
       try {
-        const res = await fetch("/api/golden-finds/latest?limit=5", { cache: "no-store" });
+        const res = await fetch("/api/golden-finds/latest?limit=10", { cache: "no-store" });
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         const dataRows =
