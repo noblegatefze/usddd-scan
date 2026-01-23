@@ -770,10 +770,20 @@ export default function FundNetworkPage() {
               </div>
 
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
-                <div className="text-[12px] text-slate-400">Network Backing</div>
-                <div className="mt-1 text-[12px] text-slate-500">
+                <div className="flex items-center justify-between">
+                  <div className="text-[12px] text-slate-400">Protocol Backing (Global)</div>
+                  <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-0.5 text-[10px] text-slate-400">
+                    Protocol-wide
+                  </span>
+                </div>
+
+                <div className="mt-1 text-[11px] text-slate-500">
+                  These totals are protocol-wide (not your personal balance). Your totals are shown above.
+                </div>
+
+                <div className="mt-2 text-[12px] text-slate-500">
                   {fundSummary ? (
-                    <div className="mt-2 grid gap-2">
+                    <div className="grid gap-2">
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="text-slate-500">Total funded (USDT)</span>
                         <span className="text-slate-200">{fmtNum(fundSummary.total_funded_usdt)}</span>
