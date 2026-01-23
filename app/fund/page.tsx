@@ -193,9 +193,28 @@ function saveSessionId(v: string) {
 
 function statusToStage(status: string) {
   const s = String(status || "");
-  if (s === "awaiting_funds") return { title: "Awaiting funds", hint: "Send USDT (BEP-20) to your unique deposit address, then confirm by tx hash." };
-  if (s === "funded_locked") return { title: "Funded (locked)", hint: "Deposit confirmed. Sweep will move funds to the treasury pipe." };
-  if (s === "swept_locked") return { title: "Swept (locked)", hint: "USDT swept to treasury pipe. Custodied allocation remains protocol-locked." };
+
+  if (s === "awaiting_funds") {
+    return {
+      title: "Awaiting",
+      hint: "Send USDT (BEP-20) to your unique deposit address, then confirm with your tx hash.",
+    };
+  }
+
+  if (s === "funded_locked") {
+    return {
+      title: "Funded",
+      hint: "Deposit verified. Next: sweep to the treasury pipe (automatic).",
+    };
+  }
+
+  if (s === "swept_locked") {
+    return {
+      title: "Swept",
+      hint: "USDT is in the treasury pipe. Allocation remains protocol-locked (custody).",
+    };
+  }
+
   return { title: s || "Unknown", hint: "Status reported by protocol." };
 }
 
