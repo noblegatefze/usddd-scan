@@ -52,8 +52,7 @@ export async function POST(req: Request) {
         funded_usdt,
         status,
         deposit_tx_hash,
-        sweep_tx_hash,
-        fund_deposit_keys!inner(enc_privkey)
+        sweep_tx_hash
       `
       )
       .eq("status", "funded_locked")
@@ -64,12 +63,18 @@ export async function POST(req: Request) {
     const { data: pos, error } = await q.limit(1).single();
     if (error || !pos) throw new Error("No sweepable position found");
 
-    // fund_deposit_keys comes back as an array
-    const keys = (pos as any).fund_deposit_keys as { enc_privkey: string }[] | undefined;
-    const enc = keys?.[0]?.enc_privkey;
-    if (!enc) throw new Error("Missing deposit key");
+    // Fetch deposit key separately (avoid fragile join/relationship issues)
+    const { data: keyRow, error: keyErr } = await sb
+      .from("fund_deposit_keys")
+      .select("enc_privkey")
+      .eq("position_id", pos.id)
+      .limit(1)
+      .single();
 
-    const priv = decryptPrivKeyHex(enc, env("FUND_KEY_ENC_SECRET"));
+    if (keyErr || !keyRow?.enc_privkey) throw new Error("Missing deposit key");
+
+    const priv = decryptPrivKeyHex(keyRow.enc_privkey as Hex, env("FUND_KEY_ENC_SECRET"));
+
     const account = privateKeyToAccount(priv);
 
     const rpc = env("BSC_RPC_URL");
