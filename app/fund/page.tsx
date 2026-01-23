@@ -174,7 +174,7 @@ function saveRefs(refs: string[]) {
   try {
     const uniq = Array.from(new Set(refs.map((r) => r.trim()).filter(Boolean)));
     localStorage.setItem(LOCAL_REFS_KEY, JSON.stringify(uniq));
-  } catch {}
+  } catch { }
 }
 
 function readSessionId(): string {
@@ -188,7 +188,7 @@ function saveSessionId(v: string) {
   try {
     if (!v.trim()) localStorage.removeItem(LOCAL_SESSION_KEY);
     else localStorage.setItem(LOCAL_SESSION_KEY, v.trim());
-  } catch {}
+  } catch { }
 }
 
 function statusToStage(status: string) {
@@ -263,6 +263,17 @@ export default function FundNetworkPage() {
   const [txInputs, setTxInputs] = React.useState<Record<string, string>>({});
   const [confirmErr, setConfirmErr] = React.useState<Record<string, string>>({});
 
+  // Confirm modal (UX)
+  const [confirmModal, setConfirmModal] = React.useState<{
+    open: boolean;
+    ref: string;
+    tx: string;
+    stage: "idle" | "verifying" | "sweeping" | "success" | "error";
+    message?: string;
+    tries: number;
+    major: boolean;
+  }>({ open: false, ref: "", tx: "", stage: "idle", tries: 0, major: false });
+
   async function hydrateDbByRefsOrSession() {
     const sid = sessionId.trim();
     const refs = readSavedRefs();
@@ -314,7 +325,7 @@ export default function FundNetworkPage() {
             total_funded_usdt: Number(j.total_funded_usdt ?? 0),
           });
         }
-      } catch {}
+      } catch { }
     };
     tick();
     const t = setInterval(tick, 10000);
@@ -350,7 +361,7 @@ export default function FundNetworkPage() {
         const j: any = await r.json();
         const m = coerceMeta(j);
         if (!cancelled && m) setMeta(m);
-      } catch {}
+      } catch { }
     })();
 
     (async () => {
@@ -359,7 +370,7 @@ export default function FundNetworkPage() {
         const j: any = await r.json();
         const a = coerceActivity(j);
         if (!cancelled && a) setActivity(a);
-      } catch {}
+      } catch { }
     })();
 
     return () => {
@@ -448,14 +459,47 @@ export default function FundNetworkPage() {
     }
   }
 
+  function isMajorConfirmError(msg: string) {
+    const m = msg.toLowerCase();
+    return (
+      m.includes("amount out of bounds") ||
+      m.includes("no matching usdt transfer") ||
+      m.includes("send only usdt") ||
+      m.includes("wrong token") ||
+      m.includes("wrong chain")
+    );
+  }
+
+  function mailtoRecovery(ref: string, tx: string) {
+    const to = "hq@noblegate.ae";
+    const subject = encodeURIComponent(`USDDD Fund Recovery Request — ${ref}`);
+    const body = encodeURIComponent(
+      `Hello HQ,\n\nI need help recovering a deposit sent to a USDDD Fund Network address.\n\nRef: ${ref}\nTx hash: ${tx}\nSession id (if available): ${sessionId.trim()}\n\nNotes:\n- I may have used the wrong token/chain or made an incorrect transfer.\n- Please advise the recovery process.\n\nThank you.`
+    );
+    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+  }
+
   async function confirmDeposit(ref: string) {
     const tx = (txInputs[ref] ?? "").trim();
     if (!tx) {
       setConfirmErr((prev) => ({ ...prev, [ref]: "Enter tx hash" }));
       return;
     }
+
+    // open modal
+    setConfirmModal((prev) => ({
+      open: true,
+      ref,
+      tx,
+      stage: "verifying",
+      message: "Verifying deposit…",
+      tries: (prev.ref === ref ? prev.tries : 0) + 1,
+      major: false,
+    }));
+
     setConfirmErr((prev) => ({ ...prev, [ref]: "" }));
     setConfirming((prev) => ({ ...prev, [ref]: true }));
+
     try {
       const r = await fetch("/api/fund/confirm", {
         method: "POST",
@@ -463,11 +507,47 @@ export default function FundNetworkPage() {
         body: JSON.stringify({ ref, tx_hash: tx, session_id: sessionId.trim() || null }),
         cache: "no-store",
       });
-      const j: any = await r.json();
+
+      const j: any = await r.json().catch(() => ({}));
+
       if (!j?.ok) {
-        setConfirmErr((prev) => ({ ...prev, [ref]: j?.error ?? "Confirm failed" }));
+        const msg = String(j?.error ?? "Confirm failed");
+        const major = isMajorConfirmError(msg);
+
+        setConfirmErr((prev) => ({ ...prev, [ref]: msg }));
+
+        setConfirmModal((prev) => ({
+          ...prev,
+          open: true,
+          stage: "error",
+          message: msg,
+          major: major || prev.tries >= 2, // escalate after 2 tries
+        }));
+
         return;
       }
+
+      // If confirm ok but sweep failed, show it as "sweeping" then error
+      if (j?.sweep && j.sweep.ok === false) {
+        const msg = String(j?.sweep?.error ?? "Sweep failed (try again shortly)");
+        setConfirmModal((prev) => ({
+          ...prev,
+          stage: "error",
+          message: `Deposit confirmed, but sweep is pending: ${msg}`,
+          major: false,
+        }));
+        // still refresh DB so user sees funded_locked row if it exists
+        await hydrateDbByRefsOrSession();
+        return;
+      }
+
+      // Success
+      setConfirmModal((prev) => ({
+        ...prev,
+        stage: "success",
+        message: "Position added ✅",
+        major: false,
+      }));
 
       await hydrateDbByRefsOrSession();
 
@@ -478,9 +558,24 @@ export default function FundNetworkPage() {
       setTimeout(() => {
         const el = document.getElementById("positions");
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 50);
+      }, 80);
+
+      // Hold modal for 900ms then close
+      setTimeout(() => {
+        setConfirmModal((prev) => ({ ...prev, open: false, stage: "idle", message: undefined }));
+      }, 900);
     } catch (e: any) {
-      setConfirmErr((prev) => ({ ...prev, [ref]: e?.message ?? "Confirm failed" }));
+      const msg = String(e?.message ?? "Confirm failed");
+      const major = isMajorConfirmError(msg);
+
+      setConfirmErr((prev) => ({ ...prev, [ref]: msg }));
+      setConfirmModal((prev) => ({
+        ...prev,
+        open: true,
+        stage: "error",
+        message: msg,
+        major: major || prev.tries >= 2,
+      }));
     } finally {
       setConfirming((prev) => ({ ...prev, [ref]: false }));
     }
@@ -568,6 +663,100 @@ export default function FundNetworkPage() {
           </div>
         </div>
       </header>
+
+      {confirmModal.open ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+          <div className="relative w-[92%] max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-100">Confirm deposit</div>
+                <div className="mt-1 text-[12px] text-slate-400">
+                  Ref: <span className="font-mono text-slate-200">{confirmModal.ref}</span>
+                </div>
+                <div className="mt-1 text-[12px] text-slate-400">
+                  Tx:{" "}
+                  <span className="font-mono text-slate-200">
+                    {confirmModal.tx.slice(0, 10)}…{confirmModal.tx.slice(-6)}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setConfirmModal((p) => ({ ...p, open: false }))}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                title="Close"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
+              <div className="text-[12px] text-slate-400">Status</div>
+              <div className="mt-1 text-[13px] text-slate-200">
+                {confirmModal.message ?? (confirmModal.stage === "verifying" ? "Verifying deposit…" : "Working…")}
+              </div>
+
+              {confirmModal.stage === "verifying" || confirmModal.stage === "sweeping" ? (
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full border border-slate-800 bg-slate-950/50">
+                  <div className="h-full w-1/2 animate-pulse rounded-full bg-slate-200/30" />
+                </div>
+              ) : null}
+
+              {confirmModal.stage === "error" ? (
+                <div className="mt-3 space-y-2">
+                  <div className="text-[11px] text-slate-500">
+                    If you entered the wrong tx hash, close this window, correct it, and confirm again.
+                  </div>
+
+                  {confirmModal.major ? (
+                    <div className="rounded-md border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
+                      <div className="font-semibold text-amber-200/90">Recovery may be required</div>
+                      <div className="mt-1 text-[11px] text-amber-200/90">
+                        This can happen if the wrong token/chain was used, or the amount was outside the allowed range.
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => mailtoRecovery(confirmModal.ref, confirmModal.tx)}
+                          className="rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-[12px] text-amber-100 hover:bg-amber-950/50"
+                        >
+                          Request recovery (email HQ)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setConfirmModal((p) => ({ ...p, open: false }))}
+                          className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+                        >
+                          Edit tx hash
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmModal((p) => ({ ...p, open: false }))}
+                        className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+                      >
+                        Edit tx hash
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {confirmModal.stage === "success" ? (
+              <div className="mt-3 text-[11px] text-slate-500">Returning to your positions…</div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mx-auto max-w-6xl px-4 pt-6 pb-24">
         <div className="grid gap-4 md:grid-cols-12">
