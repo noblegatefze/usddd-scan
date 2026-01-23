@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   createPublicClient,
@@ -24,7 +24,6 @@ function normalizePk(pk: string): Hex {
   throw new Error("Bad PK format (expected 64 hex chars)");
 }
 
-// Minimal ABI for Fund Network mint + treasury sweep
 const USDDD_ABI = parseAbi([
   "function mintToTreasury(uint256 amount) returns (bool)",
   "function transfer(address to, uint256 value) returns (bool)",
@@ -53,6 +52,8 @@ export async function POST(req: Request) {
         status,
         sweep_tx_hash,
         swept_at,
+        usddd_allocated,
+        usddd_accrued_display,
         usddd_mint_tx_hash,
         usddd_minted_at,
         usddd_transfer_tx_hash,
@@ -70,20 +71,22 @@ export async function POST(req: Request) {
       throw new Error(`Position not mintable in status=${pos.status}`);
     }
     if (!pos.sweep_tx_hash) throw new Error("Missing sweep_tx_hash");
-    if (pos.funded_usdt == null || Number(pos.funded_usdt) <= 0) throw new Error("Bad funded_usdt");
+    if (!pos.funded_usdt || Number(pos.funded_usdt) <= 0) throw new Error("Bad funded_usdt");
 
     const rpcUrl = env("BSC_RPC_URL");
-
-    // USDDD proxy/token address
     const token = env("BSC_USDDD_ADDRESS", env("NEXT_PUBLIC_USDDD_TOKEN_BEP20")).toLowerCase() as Hex;
 
-    const usdddDecimals = Number(env("BSC_USDDD_DECIMALS", "18"));
-    const amountStr = String(pos.funded_usdt).trim();
-    const amountWei = parseUnits(amountStr, usdddDecimals);
+    // IMPORTANT: USDDD mint receiver is treasury (already configured in token)
+    // Then we sweep USDDD from treasury EOA -> position deposit address.
+    // USDDD is 6 decimals on-chain (lock it; do not use env to avoid catastrophic mints)
+    const USDDD_DECIMALS = 6;
 
-    // Signers (server-only)
-    const mintPk = normalizePk(env("FUND_USDDD_MINTER_PK"));
-    const treasuryPk = normalizePk(env("FUND_USDDD_TREASURY_PK"));
+    const amountStr = String(pos.funded_usdt).trim();
+    const amountWei = parseUnits(amountStr, USDDD_DECIMALS);
+
+
+    const mintPk = normalizePk(env("FUND_USDDD_MINTER_PK"));      // owner/manager PK (mint authority)
+    const treasuryPk = normalizePk(env("FUND_USDDD_TREASURY_PK")); // treasury pipe PK (EOA to transfer out)
 
     const mintAccount = privateKeyToAccount(mintPk);
     const treasuryAccount = privateKeyToAccount(treasuryPk);
@@ -109,16 +112,18 @@ export async function POST(req: Request) {
       await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       // update only if still null (idempotent guard)
-      const { error: updErr } = await sb
+      const { data: rows, error: updErr } = await sb
         .from("fund_positions")
         .update({
           usddd_mint_tx_hash: txHash,
           usddd_minted_at: new Date().toISOString(),
         })
         .eq("id", pos.id)
-        .is("usddd_mint_tx_hash", null);
+        .is("usddd_mint_tx_hash", null)
+        .select("id");
 
       if (updErr) throw updErr;
+      // if someone else updated first, we still proceed (tx happened); keep txHash for response
       mintTx = txHash;
     }
 
@@ -148,11 +153,11 @@ export async function POST(req: Request) {
         .update({
           usddd_transfer_tx_hash: txHash,
           usddd_transferred_at: nowIso,
-          // fund network custody allocation
+          // Fund Network custody allocation
           usddd_allocated: Number(amountStr),
-          // start display-only accrual clock deterministically
+          // start the display-only accrual clock deterministically
           usddd_accrual_started_at: accrualStart,
-          // display starts at 0; UI will compute increasing value from accrual_started_at
+          // display starts at 0; UI computes increasing value from accrual_started_at
           usddd_accrued_display: 0,
         })
         .eq("id", pos.id)
