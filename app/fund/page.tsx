@@ -174,7 +174,7 @@ function saveRefs(refs: string[]) {
   try {
     const uniq = Array.from(new Set(refs.map((r) => r.trim()).filter(Boolean)));
     localStorage.setItem(LOCAL_REFS_KEY, JSON.stringify(uniq));
-  } catch { }
+  } catch {}
 }
 
 function readSessionId(): string {
@@ -188,7 +188,7 @@ function saveSessionId(v: string) {
   try {
     if (!v.trim()) localStorage.removeItem(LOCAL_SESSION_KEY);
     else localStorage.setItem(LOCAL_SESSION_KEY, v.trim());
-  } catch { }
+  } catch {}
 }
 
 function statusToStage(status: string) {
@@ -246,7 +246,11 @@ export default function FundNetworkPage() {
   const [dbPositions, setDbPositions] = React.useState<DbPosition[]>([]);
   const [loadingDb, setLoadingDb] = React.useState(false);
 
-  const [fundSummary, setFundSummary] = React.useState<{ pending_positions: number; active_positions: number; total_funded_usdt: number } | null>(null);
+  const [fundSummary, setFundSummary] = React.useState<{
+    pending_positions: number;
+    active_positions: number;
+    total_funded_usdt: number;
+  } | null>(null);
 
   // Terminal session binding
   const [sessionId, setSessionId] = React.useState<string>("");
@@ -310,7 +314,7 @@ export default function FundNetworkPage() {
             total_funded_usdt: Number(j.total_funded_usdt ?? 0),
           });
         }
-      } catch { }
+      } catch {}
     };
     tick();
     const t = setInterval(tick, 10000);
@@ -346,7 +350,7 @@ export default function FundNetworkPage() {
         const j: any = await r.json();
         const m = coerceMeta(j);
         if (!cancelled && m) setMeta(m);
-      } catch { }
+      } catch {}
     })();
 
     (async () => {
@@ -355,7 +359,7 @@ export default function FundNetworkPage() {
         const j: any = await r.json();
         const a = coerceActivity(j);
         if (!cancelled && a) setActivity(a);
-      } catch { }
+      } catch {}
     })();
 
     return () => {
@@ -464,7 +468,17 @@ export default function FundNetworkPage() {
         setConfirmErr((prev) => ({ ...prev, [ref]: j?.error ?? "Confirm failed" }));
         return;
       }
+
       await hydrateDbByRefsOrSession();
+
+      // UX: clear receipt after success + show row
+      setPositions((prev) => prev.filter((p) => p.ref !== ref));
+      setTxInputs((prev) => ({ ...prev, [ref]: "" }));
+
+      setTimeout(() => {
+        const el = document.getElementById("positions");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
     } catch (e: any) {
       setConfirmErr((prev) => ({ ...prev, [ref]: e?.message ?? "Confirm failed" }));
     } finally {
@@ -493,8 +507,12 @@ export default function FundNetworkPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">Zero / Pre-Genesis</span>
-            <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300">LIVE</span>
+            <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+              Zero / Pre-Genesis
+            </span>
+            <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300">
+              LIVE
+            </span>
           </div>
         </div>
 
@@ -507,16 +525,34 @@ export default function FundNetworkPage() {
             <span>Build: {meta?.build ?? "—"}</span>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Link href={LINKS.home} className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
+              <Link
+                href={LINKS.home}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
                 Back to Scan
               </Link>
-              <a href={LINKS.terminal} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
+              <a
+                href={LINKS.terminal}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
                 Open Terminal
               </a>
-              <a href={LINKS.telegram} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
+              <a
+                href={LINKS.telegram}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
                 Telegram
               </a>
-              <a href={LINKS.docs} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
+              <a
+                href={LINKS.docs}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
                 Docs
               </a>
             </div>
@@ -539,7 +575,8 @@ export default function FundNetworkPage() {
             <div className="mb-3">
               <h1 className="text-base font-semibold text-slate-100">Fund Network</h1>
               <div className="mt-1 text-[12px] text-slate-400 break-words">
-                Create a dedicated deposit address, fund the network with USDT (BEP-20), and receive a custodied USDDD allocation tied to the protocol.
+                Create a dedicated deposit address, fund the network with USDT (BEP-20), and receive a custodied USDDD
+                allocation tied to the protocol.
               </div>
             </div>
 
@@ -563,7 +600,8 @@ export default function FundNetworkPage() {
                   <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 px-3 py-2 text-[12px] text-slate-300">
                     <div className="font-semibold text-slate-200">Link to Terminal (recommended)</div>
                     <div className="mt-1 text-slate-400">
-                      To permanently access positions across devices, link this page to your DIGDUG Terminal session (no password required here).
+                      To permanently access positions across devices, link this page to your DIGDUG Terminal session (no
+                      password required here).
                     </div>
 
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -597,11 +635,14 @@ export default function FundNetworkPage() {
 
                     {bindErr && <div className="mt-2 text-[12px] text-amber-200">{bindErr}</div>}
                     <div className="mt-2 text-[11px] text-slate-500">
-                      Tip: open Terminal in a separate tab, log in, then copy your current session_id (we'll add a UI button later).
+                      Tip: open Terminal in a separate tab, log in, then copy your current session_id (we&apos;ll add a UI
+                      button later).
                     </div>
                   </div>
 
-                  <div className="mt-3 text-[12px] text-slate-500">By continuing, you confirm you understand the protocol terms above.</div>
+                  <div className="mt-3 text-[12px] text-slate-500">
+                    By continuing, you confirm you understand the protocol terms above.
+                  </div>
                 </div>
               </div>
             </div>
@@ -698,8 +739,8 @@ export default function FundNetworkPage() {
                       </div>
 
                       <div className="mt-2 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-red-300">
-                        ⚠️ <strong>Important:</strong> Deposits must be sent in <strong>one single transfer</strong> between
-                        <strong> 100 and 250,000 USDT</strong>. Multiple smaller transfers are not aggregated.
+                        ⚠️ <strong>Important:</strong> Deposits must be sent in <strong>one single transfer</strong> between{" "}
+                        <strong>100 and 250,000 USDT</strong>. Multiple smaller transfers are not aggregated.
                       </div>
 
                       <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 px-3 py-2 text-[12px]">
@@ -751,8 +792,12 @@ export default function FundNetworkPage() {
             <div className="grid gap-3">
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] text-slate-400">Applied Accrual (current reference)</div>
-                <div className="mt-1 text-xl font-semibold text-slate-100">{appliedAccrualPct == null ? "—" : fmtPct2(appliedAccrualPct)}</div>
-                <div className="mt-1 text-[12px] text-slate-500">Range: {fmtPct2(floorPct)}-{fmtPct2(capPct)}</div>
+                <div className="mt-1 text-xl font-semibold text-slate-100">
+                  {appliedAccrualPct == null ? "—" : fmtPct2(appliedAccrualPct)}
+                </div>
+                <div className="mt-1 text-[12px] text-slate-500">
+                  Range: {fmtPct2(floorPct)}-{fmtPct2(capPct)}
+                </div>
               </div>
 
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
@@ -824,7 +869,7 @@ export default function FundNetworkPage() {
             </div>
           </section>
 
-          <section className="md:col-span-12 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+          <section id="positions" className="md:col-span-12 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-200">{bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}</h2>
               <div className="text-[11px] text-slate-500">{loadingDb ? "Refreshing…" : "Withdraw shown but locked"}</div>
@@ -863,19 +908,14 @@ export default function FundNetworkPage() {
                             {p.issued_deposit_address.slice(0, 10)}…{p.issued_deposit_address.slice(-6)}
                           </td>
                           <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? fmtNum(Number(p.funded_usdt)) : "—"}</td>
-                          <td className="py-2 pr-4">
-                            {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}
-                          </td>
-                          <td className="py-2 pr-4">
-                            {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}
-                          </td>
+                          <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
+                          <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
                           <td className="py-2 pr-4">
                             {p.gas_topup_tx_hash ? (
                               <div className="text-[11px]">
                                 <TxLink hash={p.gas_topup_tx_hash} />
                                 <div className="text-slate-500">
                                   {Number(p.gas_topup_bnb ?? 0) ? `${fmtDec(Number(p.gas_topup_bnb), 6)} BNB` : ""}
-
                                 </div>
                               </div>
                             ) : (
