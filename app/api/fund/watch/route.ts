@@ -65,41 +65,46 @@ export async function GET(req: Request) {
 
       let found: { txHash: Hex; amt: number; blockNumber: bigint } | null = null;
 
-      // scan in small block chunks to avoid RPC "limit exceeded"
       let cursor = fromBase;
       while (cursor <= latest) {
-        const toBlock = cursor + BigInt(chunkSize) - 1n;
+        const toBlock = cursor + BigInt(chunkSize) - BigInt(1);
         const end = toBlock > latest ? latest : toBlock;
 
-        const logs = await client.getLogs({
+        const toTopic = ("0x" + toAddr.slice(2).padStart(64, "0")) as Hex;
+
+        // strict RPC-safe getLogs using padded topics (TS escape hatch)
+        const logs = await (client as any).getLogs({
           address: usdt,
-          event: transferEvent,
           fromBlock: cursor,
           toBlock: end,
-          args: { to: toAddr as Hex },
+          topics: ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef", null, toTopic],
         });
 
-        checked.push({ ref: p.position_ref, chunk_from: cursor.toString(), chunk_to: end.toString(), logs: logs.length });
+        checked.push({
+          ref: p.position_ref,
+          chunk_from: cursor.toString(),
+          chunk_to: end.toString(),
+          logs: Array.isArray(logs) ? logs.length : 0,
+        });
 
-        if (logs.length) {
+        if (Array.isArray(logs) && logs.length) {
           for (const lg of logs) {
-            const raw = lg.args?.value;
-            if (raw == null) continue;
-
+            const raw = BigInt(lg.data as Hex);
             const amt = Number(formatUnits(raw, decimals));
+
             if (!Number.isFinite(amt)) continue;
             if (amt < min || amt > max) continue;
 
-            const txHash = lg.transactionHash;
+            const txHash = lg.transactionHash as Hex;
             if (!isHexTx(txHash)) continue;
 
-            found = { txHash, amt, blockNumber: lg.blockNumber };
+            found = { txHash, amt, blockNumber: lg.blockNumber as bigint };
             break;
           }
         }
 
         if (found) break;
-        cursor = end + 1n;
+        cursor = end + BigInt(1);
       }
 
       if (!found) continue;
@@ -136,8 +141,8 @@ export async function GET(req: Request) {
       from_block: fromBase.toString(),
       to_block: latest.toString(),
       updates,
-      checked: checked.slice(0, 25), // keep response small
-      note: "Chunked watcher: avoids public RPC getLogs limits by scanning in small block ranges.",
+      checked: checked.slice(0, 25),
+      note: "Chunked watcher: strict padded topics for Transfer(to) to satisfy strict RPC providers.",
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "watch failed" }, { status: 400 });
