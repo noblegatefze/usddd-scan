@@ -842,20 +842,11 @@ export default function FundNetworkPage() {
                   <button
                     type="button"
                     onClick={issueNewPosition}
-                    disabled={issuing}
+                    disabled={issuing || positions.length > 0}
+                    title={positions.length > 0 ? "Finish or dismiss your current receipt first." : "Generate a unique deposit address"}
                     className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70 disabled:opacity-60"
                   >
                     {issuing ? "Generating..." : "Generate Deposit Address & Fund Network"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={issueNewPosition}
-                    disabled={issuing}
-                    className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70 disabled:opacity-60"
-                    title="Creates a separate new position (recommended)"
-                  >
-                    {issuing ? "Please wait..." : "Deposit More (New Position)"}
                   </button>
 
                   <button
@@ -911,6 +902,17 @@ export default function FundNetworkPage() {
                           <span className="text-slate-500">{p.status}</span>
                         </div>
                         <div className="text-[11px] text-slate-500">{new Date(p.created_at).toLocaleString()}</div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPositions((prev) => prev.filter((x) => x.ref !== p.ref))}
+                          className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-950/70"
+                          title="Removes this receipt from the screen (position ref remains saved)."
+                        >
+                          Dismiss
+                        </button>
+                        <span className="text-[11px] text-slate-600">Generate a new address after dismissing or confirming.</span>
                       </div>
 
                       <div className="mt-2 text-[12px] text-slate-400">Unique deposit address (USDT BEP-20)</div>
