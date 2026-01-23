@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createPublicClient, http, parseAbiItem, Hex, formatUnits } from "viem";
 
@@ -35,13 +35,18 @@ export async function GET(req: Request) {
 
     const client = createPublicClient({ transport: http(rpcUrl) });
 
-    let q = sb
-      .from("fund_positions")
-      .select("id, position_ref, issued_deposit_address, expected_min_usdt, expected_max_usdt, status, deposit_tx_hash");
+    // Always fetch enough fields to make overwrite-safe decisions
+    let q = sb.from("fund_positions").select(
+      "id, position_ref, issued_deposit_address, expected_min_usdt, expected_max_usdt, status, deposit_tx_hash"
+    );
 
     if (ref) q = q.eq("position_ref", ref);
     if (address) q = q.eq("issued_deposit_address", address);
-    if (!ref && !address) q = q.eq("status", "awaiting_funds");
+
+    // Default behavior: only scan truly awaiting positions (prevents corrupting funded/swept)
+    if (!ref && !address) {
+      q = q.eq("status", "awaiting_funds").is("deposit_tx_hash", null);
+    }
 
     const { data: positions, error } = await q.limit(50);
     if (error) throw error;
@@ -49,7 +54,8 @@ export async function GET(req: Request) {
     const latest = await client.getBlockNumber();
     const fromBase = latest > BigInt(watchBlocks) ? latest - BigInt(watchBlocks) : BigInt(0);
 
-    const transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
+    // (kept for clarity / future; we still use strict topic hash directly)
+    parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 
     const updates: any[] = [];
     const checked: any[] = [];
@@ -58,13 +64,16 @@ export async function GET(req: Request) {
       const toAddr = String(p.issued_deposit_address ?? "").toLowerCase();
       if (!toAddr.startsWith("0x") || toAddr.length !== 42) continue;
 
-      if (!ref && !address && p.deposit_tx_hash) continue;
+      // HARD STOP: never overwrite once set, and never touch beyond awaiting_funds
+      if (String(p.status ?? "") !== "awaiting_funds") continue;
+      if (p.deposit_tx_hash) continue;
 
       const min = Number(p.expected_min_usdt);
       const max = Number(p.expected_max_usdt);
 
       let found: { txHash: Hex; amt: number; blockNumber: bigint } | null = null;
 
+      // We scan from older -> newer in the window, so we naturally pick the first matching tx
       let cursor = fromBase;
       while (cursor <= latest) {
         const toBlock = cursor + BigInt(chunkSize) - BigInt(1);
@@ -72,7 +81,7 @@ export async function GET(req: Request) {
 
         const toTopic = ("0x" + toAddr.slice(2).padStart(64, "0")) as Hex;
 
-        // strict RPC-safe getLogs using padded topics (TS escape hatch)
+        // strict RPC-safe getLogs using padded topics
         const logs = await (client as any).getLogs({
           address: usdt,
           fromBlock: cursor,
@@ -112,7 +121,8 @@ export async function GET(req: Request) {
       const blk = await client.getBlock({ blockNumber: found.blockNumber });
       const fundedAtIso = new Date(Number(blk.timestamp) * 1000).toISOString();
 
-      await sb
+      // DB-guarded update: will NOT overwrite if something else already set it
+      const { data: updRows, error: updErr } = await sb
         .from("fund_positions")
         .update({
           deposit_tx_hash: found.txHash,
@@ -120,7 +130,16 @@ export async function GET(req: Request) {
           funded_at: fundedAtIso,
           status: "funded_locked",
         })
-        .eq("id", p.id);
+        .eq("id", p.id)
+        .eq("status", "awaiting_funds")
+        .is("deposit_tx_hash", null)
+        .select("id");
+
+      if (updErr) throw updErr;
+      if (!updRows || updRows.length === 0) {
+        // someone else (or a previous run) already set it — do not report an update
+        continue;
+      }
 
       updates.push({
         id: p.id,
@@ -142,10 +161,9 @@ export async function GET(req: Request) {
       to_block: latest.toString(),
       updates,
       checked: checked.slice(0, 25),
-      note: "Chunked watcher: strict padded topics for Transfer(to) to satisfy strict RPC providers.",
+      note: "Chunked watcher: strict padded topics. Overwrite-safe: will not modify positions once deposit_tx_hash is set or status moves beyond awaiting_funds.",
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "watch failed" }, { status: 400 });
   }
 }
-

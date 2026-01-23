@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, createDecipheriv } from "crypto";
-import { createPublicClient, createWalletClient, http, Hex, parseAbi, formatUnits } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  Hex,
+  parseAbi,
+  formatUnits,
+  parseUnits,
+  parseEther,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 function env(name: string, fallback?: string): string {
@@ -9,6 +18,13 @@ function env(name: string, fallback?: string): string {
   if (v && v.trim()) return v.trim();
   if (fallback != null) return fallback;
   throw new Error(`Missing env: ${name}`);
+}
+
+function normalizePk(pk: string): Hex {
+  const s = pk.trim();
+  if (/^0x[0-9a-fA-F]{64}$/.test(s)) return s as Hex;
+  if (/^[0-9a-fA-F]{64}$/.test(s)) return (`0x${s}`) as Hex;
+  throw new Error("Bad FUND_GAS_TOPUP_PK format (expected 64 hex chars)");
 }
 
 // AES-256-GCM decrypt (inverse of issue-address)
@@ -32,6 +48,10 @@ const ERC20_ABI = parseAbi([
   "function balanceOf(address owner) view returns (uint256)",
 ]);
 
+// Hard-coded (per scope)
+const GAS_TOPUP_THRESHOLD_BNB = 0.0006; // if deposit EOA has less than this, it will fail to sweep often
+const GAS_TOPUP_AMOUNT_BNB = 0.002;     // enough for a couple txs comfortably on BSC
+
 export async function POST(req: Request) {
   try {
     const j = await req.json().catch(() => ({} as any));
@@ -41,7 +61,7 @@ export async function POST(req: Request) {
       auth: { persistSession: false },
     });
 
-    // Build query first, then apply ref filter, then single()
+    // find a sweepable position
     let q = sb
       .from("fund_positions")
       .select(
@@ -52,7 +72,10 @@ export async function POST(req: Request) {
         funded_usdt,
         status,
         deposit_tx_hash,
-        sweep_tx_hash
+        sweep_tx_hash,
+        gas_topup_tx_hash,
+        gas_topup_bnb,
+        gas_topup_at
       `
       )
       .eq("status", "funded_locked")
@@ -73,9 +96,8 @@ export async function POST(req: Request) {
 
     if (keyErr || !keyRow?.enc_privkey) throw new Error("Missing deposit key");
 
-    const priv = decryptPrivKeyHex(keyRow.enc_privkey as Hex, env("FUND_KEY_ENC_SECRET"));
-
-    const account = privateKeyToAccount(priv);
+    const depositPriv = decryptPrivKeyHex(keyRow.enc_privkey as Hex, env("FUND_KEY_ENC_SECRET"));
+    const depositAccount = privateKeyToAccount(depositPriv);
 
     const rpc = env("BSC_RPC_URL");
     const usdt = env("BSC_USDT_ADDRESS").toLowerCase() as Hex;
@@ -83,28 +105,64 @@ export async function POST(req: Request) {
     const decimals = Number(env("BSC_USDT_DECIMALS", "18"));
 
     const publicClient = createPublicClient({ transport: http(rpc) });
-    const walletClient = createWalletClient({ account, transport: http(rpc) });
+    const depositWallet = createWalletClient({ account: depositAccount, transport: http(rpc) });
 
-    // Amount: use funded_usdt from DB (matches watcher validation)
-    const funded = Number(pos.funded_usdt);
+    // 1) Auto gas top-up if needed
+    const balWei = await publicClient.getBalance({ address: depositAccount.address });
+    const balBnb = Number(formatUnits(balWei, 18));
+
+    if (balBnb < GAS_TOPUP_THRESHOLD_BNB) {
+      // only do one automated top-up per position in this sweep flow
+      if (pos.gas_topup_tx_hash) {
+        throw new Error(
+          `Deposit EOA needs gas (${balBnb} BNB). Top-up already recorded; cannot auto-topup twice.`
+        );
+      }
+
+      const opsPk = normalizePk(env("FUND_GAS_TOPUP_PK"));
+      const opsAccount = privateKeyToAccount(opsPk);
+      const opsWallet = createWalletClient({ account: opsAccount, transport: http(rpc) });
+
+      const topupHash = await opsWallet.sendTransaction({
+        to: depositAccount.address,
+        value: parseEther(String(GAS_TOPUP_AMOUNT_BNB)),
+        chain: null,
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash: topupHash });
+
+      await sb
+        .from("fund_positions")
+        .update({
+          gas_topup_tx_hash: topupHash,
+          gas_topup_bnb: GAS_TOPUP_AMOUNT_BNB,
+          gas_topup_at: new Date().toISOString(),
+        })
+        .eq("id", pos.id);
+    }
+
+    // 2) Sweep USDT using funded_usdt from DB
+    const fundedStr = String(pos.funded_usdt ?? "").trim();
+    const funded = Number(fundedStr);
     if (!Number.isFinite(funded) || funded <= 0) throw new Error("Bad funded_usdt");
 
-    const amount = BigInt(Math.round(funded * 10 ** decimals));
+    // Safe 18-decimals conversion (no JS float math)
+    const amount = parseUnits(fundedStr, decimals);
 
-    // Optional: quick sanity check balance to reduce failed txs
-    const bal = await publicClient.readContract({
+    // sanity check balance to reduce failed txs
+    const usdtBal = await publicClient.readContract({
       address: usdt,
       abi: ERC20_ABI,
       functionName: "balanceOf",
-      args: [account.address],
+      args: [depositAccount.address],
     });
 
-    const balNum = Number(formatUnits(bal, decimals));
-    if (!Number.isFinite(balNum) || bal < amount) {
-      throw new Error(`Deposit address balance insufficient (${balNum} < ${funded})`);
+    const usdtBalNum = Number(formatUnits(usdtBal, decimals));
+    if (!Number.isFinite(usdtBalNum) || usdtBal < amount) {
+      throw new Error(`Deposit address balance insufficient (${usdtBalNum} < ${funded})`);
     }
 
-    const hash = await walletClient.writeContract({
+    const sweepHash = await depositWallet.writeContract({
       chain: null,
       address: usdt,
       abi: ERC20_ABI,
@@ -112,12 +170,12 @@ export async function POST(req: Request) {
       args: [treasury, amount],
     });
 
-    await publicClient.waitForTransactionReceipt({ hash });
+    await publicClient.waitForTransactionReceipt({ hash: sweepHash });
 
     await sb
       .from("fund_positions")
       .update({
-        sweep_tx_hash: hash,
+        sweep_tx_hash: sweepHash,
         swept_at: new Date().toISOString(),
         status: "swept_locked",
       })
@@ -126,8 +184,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       position_ref: pos.position_ref,
-      sweep_tx_hash: hash,
-      from: account.address,
+      gas_topup_tx_hash: pos.gas_topup_tx_hash ?? null,
+      sweep_tx_hash: sweepHash,
+      from: depositAccount.address,
       to: treasury,
       amount_usdt: funded,
       status: "swept_locked",
@@ -136,5 +195,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message ?? "sweep failed" }, { status: 400 });
   }
 }
-
-
