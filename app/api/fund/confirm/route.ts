@@ -64,7 +64,11 @@ export async function POST(req: Request) {
     for (const lg of receipt.logs) {
       if (String(lg.address).toLowerCase() !== usdt) continue;
       if (!lg.topics || lg.topics.length < 3) continue;
-      if (String(lg.topics[0]).toLowerCase() !== "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef") continue;
+      if (
+        String(lg.topics[0]).toLowerCase() !==
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+      )
+        continue;
 
       try {
         const decoded = decodeEventLog({
@@ -112,13 +116,31 @@ export async function POST(req: Request) {
     if (updErr) throw updErr;
     if (!updRows || updRows.length === 0) throw new Error("Position updated by someone else");
 
+    // ---- NEW: Auto-sweep immediately after confirm ----
+    const origin = new URL(req.url).origin;
+
+    let sweep: any = null;
+    try {
+      const sr = await fetch(`${origin}/api/fund/sweep`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ref }),
+        cache: "no-store",
+      });
+      sweep = await sr.json();
+    } catch (e: any) {
+      sweep = { ok: false, error: e?.message ?? "sweep call failed" };
+    }
+
+    // Return confirm + sweep outcome
     return NextResponse.json({
       ok: true,
       position_ref: ref,
       deposit_tx_hash: tx,
       funded_usdt: amount,
       funded_at: fundedAtIso,
-      status: "funded_locked",
+      status: sweep?.ok ? "swept_locked" : "funded_locked",
+      sweep,
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "confirm failed" }, { status: 400 });
