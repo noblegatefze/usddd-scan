@@ -48,9 +48,10 @@ const ERC20_ABI = parseAbi([
   "function balanceOf(address owner) view returns (uint256)",
 ]);
 
-// Hard-coded (per scope)
-const GAS_TOPUP_THRESHOLD_BNB = 0.0006; // if deposit EOA has less than this, it will fail to sweep often
-const GAS_TOPUP_AMOUNT_BNB = 0.002;     // enough for a couple txs comfortably on BSC
+// Gas policy (Step 1 locked)
+const GAS_SAFETY_MULTIPLIER = 1.25; // 1.2–1.3x per scope; using 1.25x
+const GAS_TOPUP_CAP_BNB = 0.0005;  // hard cap
+const GAS_MIN_TOPUP_BNB = 0.00005; // avoid dust topups that still fail
 
 export async function POST(req: Request) {
   try {
@@ -107,17 +108,55 @@ export async function POST(req: Request) {
     const publicClient = createPublicClient({ transport: http(rpc) });
     const depositWallet = createWalletClient({ account: depositAccount, transport: http(rpc) });
 
-    // 1) Auto gas top-up if needed
-    const balWei = await publicClient.getBalance({ address: depositAccount.address });
-    const balBnb = Number(formatUnits(balWei, 18));
+    // ---- FUND AMOUNT (must be defined BEFORE gas estimation) ----
+    const fundedStr = String(pos.funded_usdt ?? "").trim();
+    const funded = Number(fundedStr);
+    if (!Number.isFinite(funded) || funded <= 0) {
+      throw new Error("Bad funded_usdt");
+    }
 
-    if (balBnb < GAS_TOPUP_THRESHOLD_BNB) {
-      // only do one automated top-up per position in this sweep flow
+    // Safe decimals conversion (no JS float math)
+    const amount = parseUnits(fundedStr, decimals);
+
+    // 1) Auto gas top-up if needed (estimated + capped)
+    let gasTopupHashOut: Hex | null = null;
+
+    const balWei = await publicClient.getBalance({ address: depositAccount.address });
+
+    // Estimate sweep gas for USDT transfer
+    const gasPrice = await publicClient.getGasPrice();
+
+    // viem: estimate gas for contract call
+    const sweepGas = await publicClient.estimateContractGas({
+      address: usdt,
+      abi: ERC20_ABI,
+      functionName: "transfer",
+      args: [treasury, amount],
+      account: depositAccount.address,
+    });
+
+    // Add small base overhead buffer (network variance, calldata, etc.)
+    const baseOverhead = 25_000n;
+
+    // requiredWei ≈ (sweepGas + overhead) * gasPrice * multiplier
+    const requiredWeiRaw = (sweepGas + baseOverhead) * gasPrice;
+    const requiredWei = BigInt(Math.ceil(Number(requiredWeiRaw) * GAS_SAFETY_MULTIPLIER));
+
+    // If we already have enough, no topup
+    if (balWei < requiredWei) {
       if (pos.gas_topup_tx_hash) {
         throw new Error(
-          `Deposit EOA needs gas (${balBnb} BNB). Top-up already recorded; cannot auto-topup twice.`
+          `Deposit EOA needs gas. Top-up already recorded; cannot auto-topup twice.`
         );
       }
+
+      const deficitWei = requiredWei - balWei;
+
+      const minWei = parseEther(String(GAS_MIN_TOPUP_BNB));
+      const capWei = parseEther(String(GAS_TOPUP_CAP_BNB));
+
+      // topUpWei = clamp(deficitWei, minWei..capWei)
+      const topUpWei = deficitWei < minWei ? minWei : deficitWei > capWei ? capWei : deficitWei;
 
       const opsPk = normalizePk(env("FUND_GAS_TOPUP_PK"));
       const opsAccount = privateKeyToAccount(opsPk);
@@ -125,29 +164,23 @@ export async function POST(req: Request) {
 
       const topupHash = await opsWallet.sendTransaction({
         to: depositAccount.address,
-        value: parseEther(String(GAS_TOPUP_AMOUNT_BNB)),
+        value: topUpWei,
         chain: null,
       });
 
       await publicClient.waitForTransactionReceipt({ hash: topupHash });
 
+      gasTopupHashOut = topupHash;
+
       await sb
         .from("fund_positions")
         .update({
           gas_topup_tx_hash: topupHash,
-          gas_topup_bnb: GAS_TOPUP_AMOUNT_BNB,
+          gas_topup_bnb: Number(formatUnits(topUpWei, 18)),
           gas_topup_at: new Date().toISOString(),
         })
         .eq("id", pos.id);
     }
-
-    // 2) Sweep USDT using funded_usdt from DB
-    const fundedStr = String(pos.funded_usdt ?? "").trim();
-    const funded = Number(fundedStr);
-    if (!Number.isFinite(funded) || funded <= 0) throw new Error("Bad funded_usdt");
-
-    // Safe 18-decimals conversion (no JS float math)
-    const amount = parseUnits(fundedStr, decimals);
 
     // sanity check balance to reduce failed txs
     const usdtBal = await publicClient.readContract({
@@ -184,7 +217,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       position_ref: pos.position_ref,
-      gas_topup_tx_hash: pos.gas_topup_tx_hash ?? null,
+      gas_topup_tx_hash: gasTopupHashOut ?? pos.gas_topup_tx_hash ?? null,
       sweep_tx_hash: sweepHash,
       from: depositAccount.address,
       to: treasury,
