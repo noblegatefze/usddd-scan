@@ -456,7 +456,7 @@ export default function FundNetworkPage() {
       const r = await fetch("/api/fund/confirm", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ref, tx_hash: tx }),
+        body: JSON.stringify({ ref, tx_hash: tx, session_id: sessionId.trim() || null }),
         cache: "no-store",
       });
       const j: any = await r.json();

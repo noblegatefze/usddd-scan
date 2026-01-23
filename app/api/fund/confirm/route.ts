@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     const j = await req.json().catch(() => ({} as any));
     const ref = typeof j?.ref === "string" ? j.ref.trim() : "";
     const tx = typeof j?.tx_hash === "string" ? j.tx_hash.trim() : "";
+    const sessionId = typeof j?.session_id === "string" ? j.session_id.trim() : "";
 
     if (!ref) throw new Error("Missing ref");
     if (!isHexTx(tx)) throw new Error("Bad tx_hash");
@@ -28,9 +29,25 @@ export async function POST(req: Request) {
       auth: { persistSession: false },
     });
 
+    // resolve terminal_user_id from dd_sessions (best-effort)
+    let terminalUserId: string | null = null;
+    if (sessionId) {
+      const { data: srow } = await sb
+        .from("dd_sessions")
+        .select("user_id")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (srow?.user_id) terminalUserId = String(srow.user_id);
+    }
+
     const { data: pos, error } = await sb
       .from("fund_positions")
-      .select("id, position_ref, issued_deposit_address, expected_min_usdt, expected_max_usdt, status, deposit_tx_hash")
+      .select(
+        "id, position_ref, issued_deposit_address, expected_min_usdt, expected_max_usdt, status, deposit_tx_hash, terminal_user_id"
+      )
       .eq("position_ref", ref)
       .limit(1)
       .single();
@@ -39,7 +56,18 @@ export async function POST(req: Request) {
 
     // do not overwrite once set
     if (pos.deposit_tx_hash) {
-      return NextResponse.json({ ok: true, status: pos.status, note: "Already confirmed (deposit_tx_hash set)." });
+      // If position already confirmed but missing terminal linkage, attach it now (best-effort)
+      if (!pos.terminal_user_id && terminalUserId) {
+        await sb.from("fund_positions").update({ terminal_user_id: terminalUserId }).eq("id", pos.id);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        status: pos.status,
+        position_ref: ref,
+        note: "Already confirmed (deposit_tx_hash set).",
+        terminal_user_id: (pos.terminal_user_id ?? terminalUserId) ?? null,
+      });
     }
 
     if (String(pos.status) !== "awaiting_funds") {
@@ -100,14 +128,17 @@ export async function POST(req: Request) {
     const blk = await client.getBlock({ blockNumber: receipt.blockNumber });
     const fundedAtIso = new Date(Number(blk.timestamp) * 1000).toISOString();
 
+    const updatePayload: any = {
+      deposit_tx_hash: tx,
+      funded_usdt: amount,
+      funded_at: fundedAtIso,
+      status: "funded_locked",
+    };
+    if (terminalUserId) updatePayload.terminal_user_id = terminalUserId;
+
     const { data: updRows, error: updErr } = await sb
       .from("fund_positions")
-      .update({
-        deposit_tx_hash: tx,
-        funded_usdt: amount,
-        funded_at: fundedAtIso,
-        status: "funded_locked",
-      })
+      .update(updatePayload)
       .eq("id", pos.id)
       .eq("status", "awaiting_funds")
       .is("deposit_tx_hash", null)
@@ -116,7 +147,7 @@ export async function POST(req: Request) {
     if (updErr) throw updErr;
     if (!updRows || updRows.length === 0) throw new Error("Position updated by someone else");
 
-    // ---- NEW: Auto-sweep immediately after confirm ----
+    // Auto-sweep immediately after confirm
     const origin = new URL(req.url).origin;
 
     let sweep: any = null;
@@ -132,13 +163,13 @@ export async function POST(req: Request) {
       sweep = { ok: false, error: e?.message ?? "sweep call failed" };
     }
 
-    // Return confirm + sweep outcome
     return NextResponse.json({
       ok: true,
       position_ref: ref,
       deposit_tx_hash: tx,
       funded_usdt: amount,
       funded_at: fundedAtIso,
+      terminal_user_id: terminalUserId,
       status: sweep?.ok ? "swept_locked" : "funded_locked",
       sweep,
     });
