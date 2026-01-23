@@ -55,6 +55,7 @@ type DbPosition = {
 
   usddd_allocated?: number | string | null;
   usddd_accrued_display?: number | string | null;
+  usddd_accrual_started_at?: string | null;
 
   terminal_user_id?: string | null;
 };
@@ -229,8 +230,8 @@ function statusToStage(status: string) {
 
   if (s === "swept_locked") {
     return {
-      title: "Swept",
-      hint: "USDT is in the treasury pipe. Allocation remains protocol-locked (custody).",
+      title: "Allocated",
+      hint: "USDDD is allocated and custodied. Accrual is active. Withdrawals unlock later.",
     };
   }
 
@@ -407,6 +408,34 @@ export default function FundNetworkPage() {
   const floorPct = typeof model.accrual_floor_pct === "number" ? model.accrual_floor_pct : 10;
   const capPct = typeof model.accrual_cap_pct === "number" ? model.accrual_cap_pct : 25;
   const rewardEff = typeof model.reward_efficiency_usd_per_usddd === "number" ? model.reward_efficiency_usd_per_usddd : null;
+
+  const [nowMs, setNowMs] = React.useState<number>(() => Date.now());
+
+  React.useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  function computeAccruedTotalUsddd(p: any): number | null {
+    const principal = Number(p?.usddd_allocated ?? 0);
+    if (!Number.isFinite(principal) || principal <= 0) return null;
+
+    const startMs = p?.usddd_accrual_started_at
+      ? Date.parse(String(p.usddd_accrual_started_at))
+      : NaN;
+
+    if (!Number.isFinite(startMs)) return principal;
+    if (typeof appliedAccrualPct !== "number") return principal;
+
+    const elapsedSec = Math.max(0, (nowMs - startMs) / 1000);
+    const yearSec = 365 * 24 * 60 * 60;
+
+    const yieldAmt =
+      principal * (appliedAccrualPct / 100) * (elapsedSec / yearSec);
+
+    const total = principal + yieldAmt;
+    return Number.isFinite(total) ? total : principal;
+  }
 
   const yourTotalUsdt = dbPositions.reduce((acc, p) => {
     const v = Number(p.funded_usdt ?? 0);
@@ -1172,7 +1201,7 @@ export default function FundNetworkPage() {
                     <th className="py-2 pr-4 text-left font-medium">Sweep tx</th>
                     <th className="py-2 pr-4 text-left font-medium">Gas topup</th>
                     <th className="py-2 pr-4 text-right font-medium">Allocated (USDDD)</th>
-                    <th className="py-2 pr-4 text-right font-medium">Accrued (display)</th>
+                    <th className="py-2 pr-4 text-right font-medium">Accrued Total (USDDD)</th>
                     <th className="py-2 pr-2 text-left font-medium">Stage</th>
                     <th className="py-2 pl-2 text-right font-medium">Withdraw</th>
                   </tr>
@@ -1209,7 +1238,12 @@ export default function FundNetworkPage() {
                             )}
                           </td>
                           <td className="py-2 pr-4 text-right">{Number(p.usddd_allocated ?? 0) ? fmtNum(Number(p.usddd_allocated)) : "—"}</td>
-                          <td className="py-2 pr-4 text-right">{Number(p.usddd_accrued_display ?? 0) ? fmtNum(Number(p.usddd_accrued_display)) : "—"}</td>
+                          <td className="py-2 pr-4 text-right">
+                            {(() => {
+                              const total = computeAccruedTotalUsddd(p);
+                              return total == null ? "—" : fmtDec(total, 6);
+                            })()}
+                          </td>
                           <td className="py-2 pr-2">
                             <div className="text-slate-200">{stage.title}</div>
                             <div className="text-[11px] text-slate-500">{stage.hint}</div>
