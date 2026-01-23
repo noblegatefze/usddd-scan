@@ -163,6 +163,22 @@ export async function POST(req: Request) {
       sweep = { ok: false, error: e?.message ?? "sweep call failed" };
     }
 
+    // Auto-mint immediately after sweep success (idempotent route)
+    let mint: any = null;
+    if (sweep?.ok) {
+      try {
+        const mr = await fetch(`${origin}/api/fund/mint`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ref }),
+          cache: "no-store",
+        });
+        mint = await mr.json();
+      } catch (e: any) {
+        mint = { ok: false, error: e?.message ?? "mint call failed" };
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       position_ref: ref,
@@ -172,6 +188,7 @@ export async function POST(req: Request) {
       terminal_user_id: terminalUserId,
       status: sweep?.ok ? "swept_locked" : "funded_locked",
       sweep,
+      mint,
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "confirm failed" }, { status: 400 });
