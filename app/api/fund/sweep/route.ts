@@ -49,9 +49,12 @@ const ERC20_ABI = parseAbi([
 ]);
 
 // Gas policy (Step 1 locked)
-const GAS_SAFETY_MULTIPLIER = 1.25; // 1.2–1.3x per scope; using 1.25x
 const GAS_TOPUP_CAP_BNB = 0.0005;  // hard cap
 const GAS_MIN_TOPUP_BNB = 0.00005; // avoid dust topups that still fail
+
+// 1.25x safety, BigInt-safe (no float math)
+const GAS_MULT_NUM = 125n;
+const GAS_MULT_DEN = 100n;
 
 export async function POST(req: Request) {
   try {
@@ -138,16 +141,15 @@ export async function POST(req: Request) {
     // Add small base overhead buffer (network variance, calldata, etc.)
     const baseOverhead = 25_000n;
 
-    // requiredWei ≈ (sweepGas + overhead) * gasPrice * multiplier
+    // requiredWei ≈ (sweepGas + overhead) * gasPrice * 1.25x (BigInt-safe)
     const requiredWeiRaw = (sweepGas + baseOverhead) * gasPrice;
-    const requiredWei = BigInt(Math.ceil(Number(requiredWeiRaw) * GAS_SAFETY_MULTIPLIER));
+    const requiredWei = (requiredWeiRaw * GAS_MULT_NUM) / GAS_MULT_DEN;
 
     // If we already have enough, no topup
     if (balWei < requiredWei) {
+      // only do one automated top-up per position in this sweep flow
       if (pos.gas_topup_tx_hash) {
-        throw new Error(
-          `Deposit EOA needs gas. Top-up already recorded; cannot auto-topup twice.`
-        );
+        throw new Error(`Deposit EOA needs gas. Top-up already recorded; cannot auto-topup twice.`);
       }
 
       const deficitWei = requiredWei - balWei;
