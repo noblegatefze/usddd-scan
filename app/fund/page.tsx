@@ -1201,7 +1201,7 @@ export default function FundNetworkPage() {
                     <th className="py-2 pr-4 text-left font-medium">Sweep tx</th>
                     <th className="py-2 pr-4 text-left font-medium">Gas topup</th>
                     <th className="py-2 pr-4 text-right font-medium">Allocated (USDDD)</th>
-                    <th className="py-2 pr-4 text-right font-medium">Accrued Total (USDDD)</th>
+                    <th className="py-2 pr-4 text-right font-medium">Total (Allocated + Accrued)</th>
                     <th className="py-2 pr-2 text-left font-medium">Stage</th>
                     <th className="py-2 pl-2 text-right font-medium">Withdraw</th>
                   </tr>
@@ -1237,11 +1237,13 @@ export default function FundNetworkPage() {
                               <span className="text-slate-600">—</span>
                             )}
                           </td>
-                          <td className="py-2 pr-4 text-right">{Number(p.usddd_allocated ?? 0) ? fmtNum(Number(p.usddd_allocated)) : "—"}</td>
+                          <td className="py-2 pr-4 text-right">
+                            {Number(p.usddd_allocated ?? 0) ? fmtDec(Number(p.usddd_allocated), 2) : "—"}
+                          </td>
                           <td className="py-2 pr-4 text-right">
                             {(() => {
                               const total = computeAccruedTotalUsddd(p);
-                              return total == null ? "—" : fmtDec(total, 6);
+                              return total == null ? "—" : fmtDec(total, 2);
                             })()}
                           </td>
                           <td className="py-2 pr-2">
