@@ -71,6 +71,7 @@ const USDDD_TOKEN_BEP20 = "0x03f65216F340bAC39c8d1911288B1c7CA071e9c3";
 
 const LOCAL_REFS_KEY = "usddd_fund_refs_v1";
 const LOCAL_SESSION_KEY = "usddd_terminal_session_id_v1";
+const LOCAL_DISMISSED_KEY = "usddd_dismissed_positions_v1";
 
 function fmtPct2(n: number) {
   return `${n.toFixed(2)}%`;
@@ -159,6 +160,24 @@ function coerceActivity(j: any): ActivityResp | null {
   return null;
 }
 
+function readDismissedRefs(): string[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_DISMISSED_KEY);
+    if (!raw) return [];
+    const j = JSON.parse(raw);
+    if (!Array.isArray(j)) return [];
+    return j.map((x) => String(x)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+function saveDismissedRefs(refs: string[]) {
+  try {
+    const uniq = Array.from(new Set(refs.map((r) => r.trim()).filter(Boolean)));
+    localStorage.setItem(LOCAL_DISMISSED_KEY, JSON.stringify(uniq));
+  } catch { }
+}
+
 function readSavedRefs(): string[] {
   try {
     const raw = localStorage.getItem(LOCAL_REFS_KEY);
@@ -240,6 +259,10 @@ export default function FundNetworkPage() {
   const [issuing, setIssuing] = React.useState(false);
   const [issueErr, setIssueErr] = React.useState<string | null>(null);
 
+  const [hideAwaiting, setHideAwaiting] = React.useState(true);
+  const [dismissedRefs, setDismissedRefs] = React.useState<string[]>([]);
+  const [dismissModal, setDismissModal] = React.useState<{ open: boolean; ref: string }>({ open: false, ref: "" });
+
   // local receipts (immediate UX)
   const [positions, setPositions] = React.useState<IssuedPosition[]>([]);
   // db truth
@@ -307,6 +330,7 @@ export default function FundNetworkPage() {
   // initial load: session id + db hydrate
   React.useEffect(() => {
     setSessionId(readSessionId());
+    setDismissedRefs(readDismissedRefs());
     void hydrateDbByRefsOrSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -393,6 +417,16 @@ export default function FundNetworkPage() {
     const v = Number(p.usddd_allocated ?? 0);
     return Number.isFinite(v) ? acc + v : acc;
   }, 0);
+
+  const dismissedSet = React.useMemo(() => new Set(dismissedRefs), [dismissedRefs]);
+
+  const visibleDbPositions = React.useMemo(() => {
+    return dbPositions.filter((p) => {
+      if (dismissedSet.has(p.position_ref)) return false;
+      if (hideAwaiting && String(p.status) === "awaiting_funds") return false;
+      return true;
+    });
+  }, [dbPositions, dismissedSet, hideAwaiting]);
 
   async function issueNewPosition() {
     if (!ack) return;
@@ -758,6 +792,51 @@ export default function FundNetworkPage() {
         </div>
       ) : null}
 
+      {dismissModal.open ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-[92%] max-w-md rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
+            <div className="text-sm font-semibold text-slate-100">Dismiss this position?</div>
+            <div className="mt-2 text-[12px] text-slate-400">
+              Ref: <span className="font-mono text-slate-200">{dismissModal.ref}</span>
+            </div>
+
+            <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 p-3 text-[12px] text-slate-400">
+              This will hide the position from this device.
+              <div className="mt-2 text-[11px] text-slate-500">
+                If you already sent funds to this address, do not dismiss — use Request recovery instead.
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDismissModal({ open: false, ref: "" })}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const ref = dismissModal.ref;
+                  setDismissedRefs((prev) => {
+                    const next = Array.from(new Set([...prev, ref]));
+                    saveDismissedRefs(next);
+                    return next;
+                  });
+                  setDismissModal({ open: false, ref: "" });
+                }}
+                className="rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-[12px] text-amber-100 hover:bg-amber-950/50"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto max-w-6xl px-4 pt-6 pb-24">
         <div className="grid gap-4 md:grid-cols-12">
           <section className="md:col-span-7 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
@@ -1061,9 +1140,25 @@ export default function FundNetworkPage() {
           </section>
 
           <section id="positions" className="md:col-span-12 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-200">{bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}</h2>
-              <div className="text-[11px] text-slate-500">{loadingDb ? "Refreshing…" : "Withdraw shown but locked"}</div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-slate-200">
+                {bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}
+              </h2>
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHideAwaiting((v) => !v)}
+                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                  title="Hide or show unfunded (Awaiting) positions"
+                >
+                  {hideAwaiting ? "Hide Awaiting: ON" : "Hide Awaiting: OFF"}
+                </button>
+
+                <div className="text-[11px] text-slate-500">
+                  {loadingDb ? "Refreshing…" : "Withdraw shown but locked"}
+                </div>
+              </div>
             </div>
 
             <div className="hidden md:block overflow-x-auto">
@@ -1083,14 +1178,14 @@ export default function FundNetworkPage() {
                   </tr>
                 </thead>
                 <tbody className="text-slate-200">
-                  {dbPositions.length === 0 ? (
+                  {visibleDbPositions.length === 0 ? (
                     <tr>
                       <td className="py-3 text-slate-500" colSpan={10}>
                         No positions yet.
                       </td>
                     </tr>
                   ) : (
-                    dbPositions.map((p) => {
+                    visibleDbPositions.map((p) => {
                       const stage = statusToStage(p.status);
                       return (
                         <tr key={p.id} className="border-b border-slate-800/40 align-top">
@@ -1120,14 +1215,27 @@ export default function FundNetworkPage() {
                             <div className="text-[11px] text-slate-500">{stage.hint}</div>
                           </td>
                           <td className="py-2 pl-2 text-right">
-                            <button
-                              type="button"
-                              disabled
-                              className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
-                              title="Locked until admin unlock"
-                            >
-                              Locked
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              {String(p.status) === "awaiting_funds" && !p.deposit_tx_hash ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setDismissModal({ open: true, ref: p.position_ref })}
+                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                                  title="Hide this unfunded position from your list"
+                                >
+                                  Dismiss
+                                </button>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                disabled
+                                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
+                                title="Locked until admin unlock"
+                              >
+                                Locked
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
