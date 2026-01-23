@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -100,7 +100,7 @@ function formatHMS(ms: number): string {
 }
 
 function GoldenPulsePills({ className = "" }: { className?: string }) {
-  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("—");
+  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("â€”");
 
   React.useEffect(() => {
     const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
@@ -246,7 +246,7 @@ function TxLink({ hash }: { hash: string }) {
       className="font-mono text-[11px] text-slate-200 hover:underline"
       title={hash}
     >
-      {hash.slice(0, 10)}…{hash.slice(-6)}
+      {hash.slice(0, 10)}â€¦{hash.slice(-6)}
     </a>
   );
 }
@@ -404,8 +404,30 @@ export default function FundNetworkPage() {
 
   const model = activity?.model ?? {};
   const appliedAccrualPct = typeof model.applied_accrual_pct === "number" ? model.applied_accrual_pct : null;
+
+  const [nowMs, setNowMs] = React.useState<number>(() => Date.now());
+  React.useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
   const floorPct = typeof model.accrual_floor_pct === "number" ? model.accrual_floor_pct : 10;
   const capPct = typeof model.accrual_cap_pct === "number" ? model.accrual_cap_pct : 25;
+
+  function computeAccruedDisplay(p: any): number | null {
+    const principal = Number(p?.usddd_allocated ?? 0);
+    if (!Number.isFinite(principal) || principal <= 0) return null;
+
+    const startMs = p?.usddd_accrual_started_at ? Date.parse(String(p.usddd_accrual_started_at)) : NaN;
+    if (!Number.isFinite(startMs)) return null;
+
+    if (appliedAccrualPct == null) return null;
+
+    const elapsedSec = Math.max(0, (nowMs - startMs) / 1000);
+    const yearSec = 365 * 24 * 60 * 60;
+
+    const accrued = principal * (appliedAccrualPct / 100) * (elapsedSec / yearSec);
+    return Number.isFinite(accrued) ? accrued : null;
+  }
   const rewardEff = typeof model.reward_efficiency_usd_per_usddd === "number" ? model.reward_efficiency_usd_per_usddd : null;
 
   const yourTotalUsdt = dbPositions.reduce((acc, p) => {
@@ -506,7 +528,7 @@ export default function FundNetworkPage() {
 
   function mailtoRecovery(ref: string, tx: string) {
     const to = "hq@noblegate.ae";
-    const subject = encodeURIComponent(`USDDD Fund Recovery Request — ${ref}`);
+    const subject = encodeURIComponent(`USDDD Fund Recovery Request â€” ${ref}`);
     const body = encodeURIComponent(
       `Hello HQ,\n\nI need help recovering a deposit sent to a USDDD Fund Network address.\n\nRef: ${ref}\nTx hash: ${tx}\nSession id (if available): ${sessionId.trim()}\n\nNotes:\n- I may have used the wrong token/chain or made an incorrect transfer.\n- Please advise the recovery process.\n\nThank you.`
     );
@@ -526,7 +548,7 @@ export default function FundNetworkPage() {
       ref,
       tx,
       stage: "verifying",
-      message: "Verifying deposit…",
+      message: "Verifying depositâ€¦",
       tries: (prev.ref === ref ? prev.tries : 0) + 1,
       major: false,
     }));
@@ -579,7 +601,7 @@ export default function FundNetworkPage() {
       setConfirmModal((prev) => ({
         ...prev,
         stage: "success",
-        message: "Position added ✅",
+        message: "Position added âœ…",
         major: false,
       }));
 
@@ -648,10 +670,10 @@ export default function FundNetworkPage() {
         <div className="border-t border-slate-800/40">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[12px] text-slate-400">
             <span>Phase: Zero</span>
-            <span className="text-slate-600">·</span>
-            <span>Version: {meta?.version ?? "—"}</span>
-            <span className="text-slate-600">·</span>
-            <span>Build: {meta?.build ?? "—"}</span>
+            <span className="text-slate-600">Â·</span>
+            <span>Version: {meta?.version ?? "â€”"}</span>
+            <span className="text-slate-600">Â·</span>
+            <span>Build: {meta?.build ?? "â€”"}</span>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <Link
@@ -712,7 +734,7 @@ export default function FundNetworkPage() {
                 <div className="mt-1 text-[12px] text-slate-400">
                   Tx:{" "}
                   <span className="font-mono text-slate-200">
-                    {confirmModal.tx.slice(0, 10)}…{confirmModal.tx.slice(-6)}
+                    {confirmModal.tx.slice(0, 10)}â€¦{confirmModal.tx.slice(-6)}
                   </span>
                 </div>
               </div>
@@ -730,7 +752,7 @@ export default function FundNetworkPage() {
             <div className="mt-4 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
               <div className="text-[12px] text-slate-400">Status</div>
               <div className="mt-1 text-[13px] text-slate-200">
-                {confirmModal.message ?? (confirmModal.stage === "verifying" ? "Verifying deposit…" : "Working…")}
+                {confirmModal.message ?? (confirmModal.stage === "verifying" ? "Verifying depositâ€¦" : "Workingâ€¦")}
               </div>
 
               {confirmModal.stage === "verifying" || confirmModal.stage === "sweeping" ? (
@@ -786,7 +808,7 @@ export default function FundNetworkPage() {
             </div>
 
             {confirmModal.stage === "success" ? (
-              <div className="mt-3 text-[11px] text-slate-500">Returning to your positions…</div>
+              <div className="mt-3 text-[11px] text-slate-500">Returning to your positionsâ€¦</div>
             ) : null}
           </div>
         </div>
@@ -804,7 +826,7 @@ export default function FundNetworkPage() {
             <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 p-3 text-[12px] text-slate-400">
               This will hide the position from this device.
               <div className="mt-2 text-[11px] text-slate-500">
-                If you already sent funds to this address, do not dismiss — use Request recovery instead.
+                If you already sent funds to this address, do not dismiss â€” use Request recovery instead.
               </div>
             </div>
 
@@ -977,7 +999,7 @@ export default function FundNetworkPage() {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="text-[12px] text-slate-400">
                           Position <span className="text-slate-200 font-semibold">{p.ref}</span>
-                          <span className="mx-2 text-slate-600">·</span>
+                          <span className="mx-2 text-slate-600">Â·</span>
                           <span className="text-slate-500">{p.status}</span>
                         </div>
                         <div className="text-[11px] text-slate-500">{new Date(p.created_at).toLocaleString()}</div>
@@ -1004,12 +1026,12 @@ export default function FundNetworkPage() {
 
                       <div className="mt-2 text-[12px] text-slate-500">
                         Min: <span className="text-slate-200">{fmtNum(p.min_usdt)} USDT</span>
-                        <span className="mx-2 text-slate-600">·</span>
+                        <span className="mx-2 text-slate-600">Â·</span>
                         Max: <span className="text-slate-200">{fmtNum(p.max_usdt)} USDT</span>
                       </div>
 
                       <div className="mt-2 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-red-300">
-                        ⚠️ <strong>Important:</strong> Deposits must be sent in <strong>one single transfer</strong> between{" "}
+                        âš ï¸ <strong>Important:</strong> Deposits must be sent in <strong>one single transfer</strong> between{" "}
                         <strong>100 and 250,000 USDT</strong>. Multiple smaller transfers are not aggregated.
                       </div>
 
@@ -1039,7 +1061,7 @@ export default function FundNetworkPage() {
                           Deposit tx: <TxLink hash={p.deposit_tx_hash} />
                         </div>
                       ) : (
-                        <div className="mt-2 text-[12px] text-slate-500">Next: confirm your deposit by tx hash → locked.</div>
+                        <div className="mt-2 text-[12px] text-slate-500">Next: confirm your deposit by tx hash â†’ locked.</div>
                       )}
                     </div>
                   ))}
@@ -1063,7 +1085,7 @@ export default function FundNetworkPage() {
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] text-slate-400">Applied Accrual (current reference)</div>
                 <div className="mt-1 text-xl font-semibold text-slate-100">
-                  {appliedAccrualPct == null ? "—" : fmtPct2(appliedAccrualPct)}
+                  {appliedAccrualPct == null ? "â€”" : fmtPct2(appliedAccrualPct)}
                 </div>
                 <div className="mt-1 text-[12px] text-slate-500">
                   Range: {fmtPct2(floorPct)}-{fmtPct2(capPct)}
@@ -1072,7 +1094,7 @@ export default function FundNetworkPage() {
 
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] text-slate-400">Reward Efficiency (driver)</div>
-                <div className="mt-1 text-[12px] text-slate-200">{rewardEff == null ? "—" : `${fmtDec(rewardEff, 4)} $/USDDD`}</div>
+                <div className="mt-1 text-[12px] text-slate-200">{rewardEff == null ? "â€”" : `${fmtDec(rewardEff, 4)} $/USDDD`}</div>
               </div>
 
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
@@ -1080,7 +1102,7 @@ export default function FundNetworkPage() {
                 <div className="mt-1 text-[12px] text-slate-500">
                   Token:{" "}
                   <a href={`${BSC_SCAN_BASE}/token/${USDDD_TOKEN_BEP20}`} target="_blank" rel="noreferrer" className="text-slate-200 hover:underline">
-                    {USDDD_TOKEN_BEP20.slice(0, 10)}…{USDDD_TOKEN_BEP20.slice(-6)}
+                    {USDDD_TOKEN_BEP20.slice(0, 10)}â€¦{USDDD_TOKEN_BEP20.slice(-6)}
                   </a>
                 </div>
               </div>
@@ -1132,7 +1154,7 @@ export default function FundNetworkPage() {
                       </div>
                     </div>
                   ) : (
-                    <span>Loading…</span>
+                    <span>Loadingâ€¦</span>
                   )}
                 </div>
               </div>
@@ -1156,7 +1178,7 @@ export default function FundNetworkPage() {
                 </button>
 
                 <div className="text-[11px] text-slate-500">
-                  {loadingDb ? "Refreshing…" : "Withdraw shown but locked"}
+                  {loadingDb ? "Refreshingâ€¦" : "Withdraw shown but locked"}
                 </div>
               </div>
             </div>
@@ -1186,16 +1208,19 @@ export default function FundNetworkPage() {
                     </tr>
                   ) : (
                     visibleDbPositions.map((p) => {
-                      const stage = statusToStage(p.status);
+                      const stage =
+                        Number(p.usddd_allocated ?? 0) > 0
+                          ? { title: "Allocated", hint: "USDDD is allocated and custodied at your deposit address (protocol-locked)." }
+                          : statusToStage(p.status);
                       return (
                         <tr key={p.id} className="border-b border-slate-800/40 align-top">
                           <td className="py-2 pr-4">{p.position_ref}</td>
                           <td className="py-2 pr-4 font-mono break-all text-[11px] text-slate-300">
-                            {p.issued_deposit_address.slice(0, 10)}…{p.issued_deposit_address.slice(-6)}
+                            {p.issued_deposit_address.slice(0, 10)}â€¦{p.issued_deposit_address.slice(-6)}
                           </td>
-                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? fmtNum(Number(p.funded_usdt)) : "—"}</td>
-                          <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
-                          <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
+                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? fmtNum(Number(p.funded_usdt)) : "â€”"}</td>
+                          <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">â€”</span>}</td>
+                          <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">â€”</span>}</td>
                           <td className="py-2 pr-4">
                             {p.gas_topup_tx_hash ? (
                               <div className="text-[11px]">
@@ -1205,11 +1230,16 @@ export default function FundNetworkPage() {
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-slate-600">—</span>
+                              <span className="text-slate-600">â€”</span>
                             )}
                           </td>
-                          <td className="py-2 pr-4 text-right">{Number(p.usddd_allocated ?? 0) ? fmtNum(Number(p.usddd_allocated)) : "—"}</td>
-                          <td className="py-2 pr-4 text-right">{Number(p.usddd_accrued_display ?? 0) ? fmtNum(Number(p.usddd_accrued_display)) : "—"}</td>
+                          <td className="py-2 pr-4 text-right">{Number(p.usddd_allocated ?? 0) ? fmtNum(Number(p.usddd_allocated)) : "â€”"}</td>
+                          <td className="py-2 pr-4 text-right">
+                            {(() => {
+                              const v = computeAccruedDisplay(p);
+                              return v == null || v <= 0 ? "—" : fmtDec(v, 6);
+                            })()}
+                          </td>
                           <td className="py-2 pr-2">
                             <div className="text-slate-200">{stage.title}</div>
                             <div className="text-[11px] text-slate-500">{stage.hint}</div>

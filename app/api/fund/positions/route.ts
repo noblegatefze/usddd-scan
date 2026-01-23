@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 function env(name: string): string {
@@ -47,6 +47,7 @@ export async function POST(req: Request) {
           gas_topup_at,
           usddd_allocated,
           usddd_accrued_display,
+          usddd_accrual_started_at,
           created_at,
           terminal_user_id
         `)
@@ -83,6 +84,7 @@ export async function POST(req: Request) {
         gas_topup_at,
         usddd_allocated,
         usddd_accrued_display,
+          usddd_accrual_started_at,
         created_at,
         terminal_user_id
       `)
