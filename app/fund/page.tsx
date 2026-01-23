@@ -30,7 +30,6 @@ type IssuedPosition = {
   status: string;
   created_at: string;
 
-  // set by watcher once detected
   deposit_tx_hash?: string | null;
   funded_usdt?: number | null;
   funded_at?: string | null;
@@ -56,6 +55,8 @@ type DbPosition = {
 
   usddd_allocated?: number | string | null;
   usddd_accrued_display?: number | string | null;
+
+  terminal_user_id?: string | null;
 };
 
 const LINKS = {
@@ -67,7 +68,9 @@ const LINKS = {
 
 const BSC_SCAN_BASE = "https://bscscan.com";
 const USDDD_TOKEN_BEP20 = "0x03f65216F340bAC39c8d1911288B1c7CA071e9c3";
+
 const LOCAL_REFS_KEY = "usddd_fund_refs_v1";
+const LOCAL_SESSION_KEY = "usddd_terminal_session_id_v1";
 
 function fmtPct2(n: number) {
   return `${n.toFixed(2)}%`;
@@ -171,16 +174,28 @@ function saveRefs(refs: string[]) {
   try {
     const uniq = Array.from(new Set(refs.map((r) => r.trim()).filter(Boolean)));
     localStorage.setItem(LOCAL_REFS_KEY, JSON.stringify(uniq));
+  } catch { }
+}
+
+function readSessionId(): string {
+  try {
+    return (localStorage.getItem(LOCAL_SESSION_KEY) ?? "").trim();
   } catch {
-    // ignore
+    return "";
   }
+}
+function saveSessionId(v: string) {
+  try {
+    if (!v.trim()) localStorage.removeItem(LOCAL_SESSION_KEY);
+    else localStorage.setItem(LOCAL_SESSION_KEY, v.trim());
+  } catch { }
 }
 
 function statusToStage(status: string) {
   const s = String(status || "");
-  if (s === "awaiting_funds") return { title: "Awaiting funds", hint: "Send USDT (BEP-20) to your unique deposit address." };
-  if (s === "funded_locked") return { title: "Funded (locked)", hint: "Deposit detected and locked. Sweep to treasury pipe will occur." };
-  if (s === "swept_locked") return { title: "Swept (locked)", hint: "USDT swept to treasury pipe. Custodied allocation continues under protocol lock." };
+  if (s === "awaiting_funds") return { title: "Awaiting funds", hint: "Send USDT (BEP-20) to your unique deposit address, then confirm by tx hash." };
+  if (s === "funded_locked") return { title: "Funded (locked)", hint: "Deposit confirmed. Sweep will move funds to the treasury pipe." };
+  if (s === "swept_locked") return { title: "Swept (locked)", hint: "USDT swept to treasury pipe. Custodied allocation remains protocol-locked." };
   return { title: s || "Unknown", hint: "Status reported by protocol." };
 }
 
@@ -208,22 +223,34 @@ export default function FundNetworkPage() {
 
   // local receipts (immediate UX)
   const [positions, setPositions] = React.useState<IssuedPosition[]>([]);
-  // db truth (persistent by ref)
+  // db truth
   const [dbPositions, setDbPositions] = React.useState<DbPosition[]>([]);
   const [loadingDb, setLoadingDb] = React.useState(false);
 
   const [fundSummary, setFundSummary] = React.useState<{ pending_positions: number; active_positions: number; total_funded_usdt: number } | null>(null);
 
-  async function hydrateDb(refs: string[]) {
-    const uniq = Array.from(new Set(refs.map((r) => r.trim()).filter(Boolean)));
-    if (uniq.length === 0) return;
+  // Terminal session binding
+  const [sessionId, setSessionId] = React.useState<string>("");
+  const [bindErr, setBindErr] = React.useState<string | null>(null);
+  const [binding, setBinding] = React.useState(false);
+  const [bound, setBound] = React.useState(false);
+
+  // Confirm deposit
+  const [confirming, setConfirming] = React.useState<Record<string, boolean>>({});
+  const [txInputs, setTxInputs] = React.useState<Record<string, string>>({});
+  const [confirmErr, setConfirmErr] = React.useState<Record<string, string>>({});
+
+  async function hydrateDbByRefsOrSession() {
+    const sid = sessionId.trim();
+    const refs = readSavedRefs();
 
     setLoadingDb(true);
     try {
+      const body: any = sid ? { session_id: sid } : { refs };
       const r = await fetch("/api/fund/positions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ refs: uniq }),
+        body: JSON.stringify(body),
         cache: "no-store",
       });
       const j: any = await r.json();
@@ -234,6 +261,7 @@ export default function FundNetworkPage() {
           return (isFinite(tb) ? tb : 0) - (isFinite(ta) ? ta : 0);
         });
         setDbPositions(arr);
+        setBound(Boolean(sid) && j.mode === "terminal_user");
       }
     } catch {
       // ignore
@@ -242,16 +270,16 @@ export default function FundNetworkPage() {
     }
   }
 
-  // Load saved refs on mount
+  // initial load: session id + db hydrate
   React.useEffect(() => {
-    const saved = readSavedRefs();
-    if (saved.length) void hydrateDb(saved);
+    setSessionId(readSessionId());
+    void hydrateDbByRefsOrSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll fund summary (always, independent of positions)
+  // Poll fund summary
   React.useEffect(() => {
     let cancelled = false;
-
     const tick = async () => {
       try {
         const r = await fetch("/api/fund/summary", { cache: "no-store" });
@@ -263,11 +291,8 @@ export default function FundNetworkPage() {
             total_funded_usdt: Number(j.total_funded_usdt ?? 0),
           });
         }
-      } catch {
-        // ignore
-      }
+      } catch { }
     };
-
     tick();
     const t = setInterval(tick, 10000);
     return () => {
@@ -276,56 +301,23 @@ export default function FundNetworkPage() {
     };
   }, []);
 
-  // Poll watcher for any positions that are still awaiting funds (and update receipts)
+  // Auto-refresh DB positions (seamless)
   React.useEffect(() => {
-    if (positions.length === 0) return;
-
     let cancelled = false;
     const tick = async () => {
-      try {
-        const pending = positions.filter((p) => !p.deposit_tx_hash);
-        if (pending.length === 0) return;
-
-        for (const p of pending.slice(0, 3)) {
-          const res = await fetch(`/api/fund/watch?ref=${encodeURIComponent(p.ref)}`, { cache: "no-store" });
-          const json: any = await res.json();
-          if (cancelled) return;
-          if (!json?.ok) continue;
-
-          const upd = (json.updates ?? [])[0];
-          if (upd?.deposit_tx_hash) {
-            setPositions((prev) =>
-              prev.map((x) =>
-                x.id === upd.id
-                  ? {
-                      ...x,
-                      status: upd.status ?? x.status,
-                      deposit_tx_hash: upd.deposit_tx_hash,
-                      funded_usdt: typeof upd.funded_usdt === "number" ? upd.funded_usdt : Number(upd.funded_usdt),
-                      funded_at: upd.funded_at ?? x.funded_at,
-                    }
-                  : x
-              )
-            );
-
-            const refs = Array.from(new Set([...readSavedRefs(), p.ref]));
-            saveRefs(refs);
-            void hydrateDb(refs);
-          }
-        }
-      } catch {
-        // ignore transient watcher failures
-      }
+      if (cancelled) return;
+      await hydrateDbByRefsOrSession();
     };
-
     tick();
-    const t = setInterval(tick, 6000);
+    const t = setInterval(tick, 10000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
-  }, [positions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
+  // meta + activity
   React.useEffect(() => {
     let cancelled = false;
 
@@ -335,7 +327,7 @@ export default function FundNetworkPage() {
         const j: any = await r.json();
         const m = coerceMeta(j);
         if (!cancelled && m) setMeta(m);
-      } catch {}
+      } catch { }
     })();
 
     (async () => {
@@ -344,7 +336,7 @@ export default function FundNetworkPage() {
         const j: any = await r.json();
         const a = coerceActivity(j);
         if (!cancelled && a) setActivity(a);
-      } catch {}
+      } catch { }
     })();
 
     return () => {
@@ -384,7 +376,7 @@ export default function FundNetworkPage() {
 
       const refs = Array.from(new Set([...readSavedRefs(), p.ref]));
       saveRefs(refs);
-      void hydrateDb(refs);
+      void hydrateDbByRefsOrSession();
 
       setTimeout(() => {
         const el = document.getElementById("receipts");
@@ -394,6 +386,70 @@ export default function FundNetworkPage() {
       setIssueErr(e?.message ?? "Failed to generate deposit address");
     } finally {
       setIssuing(false);
+    }
+  }
+
+  async function bindToTerminal() {
+    const sid = sessionId.trim();
+    setBindErr(null);
+    if (!sid) {
+      setBindErr("Enter your Terminal session_id (from your Terminal browser cookie / session).");
+      return;
+    }
+    setBinding(true);
+    try {
+      const refs = readSavedRefs();
+      if (refs.length === 0) {
+        setBindErr("No saved refs in this browser yet. Generate a position first.");
+        return;
+      }
+
+      const r = await fetch("/api/fund/bind", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: sid, refs }),
+        cache: "no-store",
+      });
+      const j: any = await r.json();
+      if (!j?.ok) {
+        setBindErr(j?.error ?? "Bind failed");
+        return;
+      }
+      saveSessionId(sid);
+      setBound(true);
+      await hydrateDbByRefsOrSession();
+    } catch (e: any) {
+      setBindErr(e?.message ?? "Bind failed");
+    } finally {
+      setBinding(false);
+    }
+  }
+
+  async function confirmDeposit(ref: string) {
+    const tx = (txInputs[ref] ?? "").trim();
+    if (!tx) {
+      setConfirmErr((prev) => ({ ...prev, [ref]: "Enter tx hash" }));
+      return;
+    }
+    setConfirmErr((prev) => ({ ...prev, [ref]: "" }));
+    setConfirming((prev) => ({ ...prev, [ref]: true }));
+    try {
+      const r = await fetch("/api/fund/confirm", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ref, tx_hash: tx }),
+        cache: "no-store",
+      });
+      const j: any = await r.json();
+      if (!j?.ok) {
+        setConfirmErr((prev) => ({ ...prev, [ref]: j?.error ?? "Confirm failed" }));
+        return;
+      }
+      await hydrateDbByRefsOrSession();
+    } catch (e: any) {
+      setConfirmErr((prev) => ({ ...prev, [ref]: e?.message ?? "Confirm failed" }));
+    } finally {
+      setConfirming((prev) => ({ ...prev, [ref]: false }));
     }
   }
 
@@ -481,26 +537,48 @@ export default function FundNetworkPage() {
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-400 break-words">
                     <li>Each funding position uses a unique deposit address. Do not reuse old addresses.</li>
                     <li>Send only USDT on BNB Chain (BEP-20). Other tokens/chains may be unrecoverable.</li>
-                    <li>USDDD is minted to protocol custody and recorded as a custodied allocation (not sent to your wallet until unlock/withdraw).</li>
-                    <li>Accrual is protocol-defined and shown as an observational reference. It is not a guarantee.</li>
-                    <li>Withdrawals are locked until admin unlock.</li>
+                    <li>For safety, deposits are confirmed by your tx hash (receipt-verified). Do not rely on automated scanning.</li>
+                    <li>Withdrawals remain locked until admin unlock.</li>
                   </ul>
 
                   <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 px-3 py-2 text-[12px] text-slate-300">
-                    <div className="font-semibold text-slate-200">Long-term access</div>
+                    <div className="font-semibold text-slate-200">Link to Terminal (recommended)</div>
                     <div className="mt-1 text-slate-400">
-                      For permanent access to positions, accruals, and custodied USDDD, use your <span className="text-slate-200">DIGDUG Terminal</span> account.
-                      When you first access the Terminal, a <span className="text-slate-200">system-generated password</span> is issued. Save it securely — it is the key to your account.
+                      To permanently access positions across devices, link this page to your DIGDUG Terminal session (no password required here).
                     </div>
-                    <div className="mt-2">
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <input
+                        value={sessionId}
+                        onChange={(e) => {
+                          setSessionId(e.target.value);
+                          saveSessionId(e.target.value);
+                        }}
+                        placeholder="Terminal session_id"
+                        className="w-full md:w-[420px] rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={bindToTerminal}
+                        disabled={binding}
+                        className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70 disabled:opacity-60"
+                      >
+                        {binding ? "Linking..." : bound ? "Linked" : "Link Terminal"}
+                      </button>
+
                       <a
                         href={LINKS.terminal}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+                        className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
                       >
-                        Open Terminal & Save Access
+                        Open Terminal
                       </a>
+                    </div>
+
+                    {bindErr && <div className="mt-2 text-[12px] text-amber-200">{bindErr}</div>}
+                    <div className="mt-2 text-[11px] text-slate-500">
+                      Tip: open Terminal in a separate tab, log in, then copy your current session_id (we'll add a UI button later).
                     </div>
                   </div>
 
@@ -558,7 +636,8 @@ export default function FundNetworkPage() {
               <div className="font-semibold text-slate-200">Safety notes</div>
               <ul className="mt-1 list-disc space-y-1 pl-5">
                 <li>Self-custody wallets are recommended. Exchange wallets may batch, split, or delay transfers.</li>
-                <li>Save your Position Ref(s). This page stores refs locally in this browser.</li>
+                <li>Save your Position Ref(s). This page stores refs locally in this browser unless linked to Terminal.</li>
+                <li>Gas for sweep is handled automatically when needed.</li>
               </ul>
             </div>
 
@@ -601,8 +680,28 @@ export default function FundNetworkPage() {
 
                       <div className="mt-2 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-red-300">
                         ⚠️ <strong>Important:</strong> Deposits must be sent in <strong>one single transfer</strong> between
-                        <strong> 100 and 250,000 USDT</strong>. Multiple smaller transfers (e.g. 10 + 90) are
-                        <strong>not aggregated</strong> and will <strong>not</strong> be credited.
+                        <strong> 100 and 250,000 USDT</strong>. Multiple smaller transfers are not aggregated.
+                      </div>
+
+                      <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 px-3 py-2 text-[12px]">
+                        <div className="text-slate-300 font-semibold">Confirm deposit (tx hash)</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            value={txInputs[p.ref] ?? ""}
+                            onChange={(e) => setTxInputs((prev) => ({ ...prev, [p.ref]: e.target.value }))}
+                            placeholder="0x..."
+                            className="w-full md:w-[520px] rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-600"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => confirmDeposit(p.ref)}
+                            disabled={confirming[p.ref]}
+                            className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70 disabled:opacity-60"
+                          >
+                            {confirming[p.ref] ? "Confirming..." : "Confirm"}
+                          </button>
+                        </div>
+                        {confirmErr[p.ref] ? <div className="mt-2 text-[12px] text-amber-200">{confirmErr[p.ref]}</div> : null}
                       </div>
 
                       {p.deposit_tx_hash ? (
@@ -610,7 +709,7 @@ export default function FundNetworkPage() {
                           Deposit tx: <TxLink hash={p.deposit_tx_hash} />
                         </div>
                       ) : (
-                        <div className="mt-2 text-[12px] text-slate-500">Next: waiting for deposit detection → tx hash receipt → locked.</div>
+                        <div className="mt-2 text-[12px] text-slate-500">Next: confirm your deposit by tx hash → locked.</div>
                       )}
                     </div>
                   ))}
@@ -653,7 +752,7 @@ export default function FundNetworkPage() {
               </div>
 
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
-                <div className="text-[12px] text-slate-400">Your Totals (saved refs)</div>
+                <div className="text-[12px] text-slate-400">{bound ? "Your Totals (Terminal)" : "Your Totals (saved refs)"}</div>
                 <div className="mt-2 grid gap-2">
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-slate-500">Positions</span>
@@ -698,7 +797,7 @@ export default function FundNetworkPage() {
 
           <section className="md:col-span-12 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-200">Positions (saved refs)</h2>
+              <h2 className="text-sm font-semibold text-slate-200">{bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}</h2>
               <div className="text-[11px] text-slate-500">{loadingDb ? "Refreshing…" : "Withdraw shown but locked"}</div>
             </div>
 
@@ -722,7 +821,7 @@ export default function FundNetworkPage() {
                   {dbPositions.length === 0 ? (
                     <tr>
                       <td className="py-3 text-slate-500" colSpan={10}>
-                        No saved positions yet.
+                        No positions yet.
                       </td>
                     </tr>
                   ) : (
@@ -747,6 +846,7 @@ export default function FundNetworkPage() {
                                 <TxLink hash={p.gas_topup_tx_hash} />
                                 <div className="text-slate-500">
                                   {Number(p.gas_topup_bnb ?? 0) ? `${fmtDec(Number(p.gas_topup_bnb), 6)} BNB` : ""}
+
                                 </div>
                               </div>
                             ) : (
