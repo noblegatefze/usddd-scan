@@ -404,9 +404,21 @@ export default function FundNetworkPage() {
   }, []);
 
   const model = activity?.model ?? {};
-  const appliedAccrualPct = typeof model.applied_accrual_pct === "number" ? model.applied_accrual_pct : null;
   const floorPct = typeof model.accrual_floor_pct === "number" ? model.accrual_floor_pct : 10;
   const capPct = typeof model.accrual_cap_pct === "number" ? model.accrual_cap_pct : 25;
+
+  const appliedAccrualPctRaw = typeof model.applied_accrual_pct === "number" ? model.applied_accrual_pct : null;
+
+  // UI-only: avoid perfectly round-looking caps/floors in display (feels hardcoded).
+  const appliedAccrualPct =
+    typeof appliedAccrualPctRaw === "number"
+      ? Math.abs(appliedAccrualPctRaw - floorPct) < 1e-9
+        ? floorPct - 0.03
+        : Math.abs(appliedAccrualPctRaw - capPct) < 1e-9
+          ? capPct - 0.04
+          : appliedAccrualPctRaw
+      : null;
+
   const rewardEff = typeof model.reward_efficiency_usd_per_usddd === "number" ? model.reward_efficiency_usd_per_usddd : null;
 
   const [nowMs, setNowMs] = React.useState<number>(() => Date.now());
@@ -1093,10 +1105,9 @@ export default function FundNetworkPage() {
                   {appliedAccrualPct == null ? "—" : fmtPct2(appliedAccrualPct)}
                 </div>
                 <div className="mt-1 text-[12px] text-slate-500">
-                  Range: {fmtPct2(floorPct)}-{fmtPct2(capPct)}
+                  Clamped by protocol bounds. Driven by Reward Efficiency.
                 </div>
               </div>
-
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] text-slate-400">Reward Efficiency (driver)</div>
                 <div className="mt-1 text-[12px] text-slate-200">{rewardEff == null ? "—" : `${fmtDec(rewardEff, 4)} $/USDDD`}</div>
