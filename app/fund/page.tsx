@@ -1190,7 +1190,7 @@ export default function FundNetworkPage() {
               </div>
             </div>
 
-            <div className="hidden md:block overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="min-w-[860px] w-full text-[12px]">
                 <thead className="text-slate-400">
                   <tr className="border-b border-slate-800/60">
