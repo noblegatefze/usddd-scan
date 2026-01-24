@@ -742,7 +742,7 @@ export default function FundNetworkPage() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
           <div className="relative w-[92%] max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
               <div>
                 <div className="text-sm font-semibold text-slate-100">Confirm deposit</div>
                 <div className="mt-1 text-[12px] text-slate-400">
@@ -1214,7 +1214,7 @@ export default function FundNetworkPage() {
                             {p.issued_deposit_address.slice(0, 10)}…{p.issued_deposit_address.slice(-6)}
                           </div>
                         </div>
-                        <div className="shrink-0 text-right">
+                        <div className="shrink-0 ml-auto text-right">
                           <div className="text-[11px] text-slate-500">Funded</div>
                           <div className="text-[13px] text-slate-200">
                             {Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "—"}
@@ -1233,12 +1233,12 @@ export default function FundNetworkPage() {
                         </div>
                       </div>
 
-                      <div className="mt-3 flex items-center justify-between gap-2">
+                      <div className="mt-3 flex flex-wrap items-start gap-2">
                         <div className="min-w-0">
                           <div className="text-[12px] text-slate-200">{stage.title}</div>
                           <div className="text-[11px] text-slate-500 truncate">{stage.hint}</div>
                         </div>
-                        <div className="min-w-0 flex items-center gap-2 overflow-hidden">
+                        <div className="min-w-0 flex flex-wrap items-center gap-2 overflow-hidden">
                           {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}
                           <span className="text-slate-700">•</span>
                           {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}
