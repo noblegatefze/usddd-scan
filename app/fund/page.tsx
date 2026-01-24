@@ -1238,7 +1238,7 @@ export default function FundNetworkPage() {
                           <div className="text-[12px] text-slate-200">{stage.title}</div>
                           <div className="text-[11px] text-slate-500 truncate">{stage.hint}</div>
                         </div>
-                        <div className="shrink-0 flex items-center gap-2">
+                        <div className="min-w-0 flex items-center gap-2 overflow-hidden">
                           {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}
                           <span className="text-slate-700">•</span>
                           {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}
