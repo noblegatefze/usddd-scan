@@ -420,9 +420,7 @@ export default function FundNetworkPage() {
     const principal = Number(p?.usddd_allocated ?? 0);
     if (!Number.isFinite(principal) || principal <= 0) return null;
 
-    const startMs = p?.usddd_accrual_started_at
-      ? Date.parse(String(p.usddd_accrual_started_at))
-      : NaN;
+    const startMs = p?.swept_at ? Date.parse(String(p.swept_at)) : NaN;
 
     if (!Number.isFinite(startMs)) return principal;
     if (typeof appliedAccrualPct !== "number") return principal;
@@ -1222,7 +1220,9 @@ export default function FundNetworkPage() {
                           <td className="py-2 pr-4 font-mono break-all text-[11px] text-slate-300">
                             {p.issued_deposit_address.slice(0, 10)}…{p.issued_deposit_address.slice(-6)}
                           </td>
-                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? fmtNum(Number(p.funded_usdt)) : "—"}</td>
+                          <td className="py-2 pr-4 text-right">
+                            {Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "—"}
+                          </td>
                           <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
                           <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
                           <td className="py-2 pr-4">
@@ -1238,7 +1238,7 @@ export default function FundNetworkPage() {
                             )}
                           </td>
                           <td className="py-2 pr-4 text-right">
-                            {p.usddd_allocated == null ? "-" : fmtDec(Number(p.usddd_allocated), 2)}
+                            {p.usddd_allocated == null ? "-" : Number(p.usddd_allocated).toFixed(2)}
                           </td>
                           <td className="py-2 pr-4 text-right">
                             {(() => {
