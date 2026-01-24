@@ -1238,12 +1238,12 @@ export default function FundNetworkPage() {
                             )}
                           </td>
                           <td className="py-2 pr-4 text-right">
-                            {Number(p.usddd_allocated ?? 0) ? fmtDec(Number(p.usddd_allocated), 2) : "—"}
+                            {p.usddd_allocated == null ? "-" : fmtDec(Number(p.usddd_allocated), 2)}
                           </td>
                           <td className="py-2 pr-4 text-right">
                             {(() => {
                               const total = computeAccruedTotalUsddd(p);
-                              return total == null ? "—" : fmtDec(total, 2);
+                              return total == null ? "-" : fmtDec(total, 4);
                             })()}
                           </td>
                           <td className="py-2 pr-2">
