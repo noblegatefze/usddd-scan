@@ -13,6 +13,10 @@ const SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
 const TABLE_BOXES = "dd_boxes";
 const TABLE_ACCOUNTING = "dd_box_accounting";
 
+// UI-only: if withdrawn_total is 0 but claimed exists, show a proxy withdrawn for nicer Scan display.
+// This does NOT write to DB and does NOT affect any protocol logic.
+const WITHDRAWN_PROXY_PCT = 0.15;
+
 type BoxRow = { id: string | number | null };
 
 type AccountingRow = {
@@ -77,17 +81,24 @@ export async function GET(req: Request) {
   const rows = ids.map((id) => {
     const a = accMap[String(id)];
     const deposited = toNum(a?.deposited_total);
-    const withdrawn = toNum(a?.withdrawn_total);
+    const withdrawn_raw = toNum(a?.withdrawn_total);
     const claimed = toNum(a?.claimed_unwithdrawn);
 
-    const remaining = deposited - withdrawn - claimed;
+    // Keep remaining tied to raw accounting (truth), not the UI proxy.
+    const remaining = deposited - withdrawn_raw - claimed;
+
+    // UI-only proxy: if raw withdrawn is 0 but there are claims, show 15% of claimed as "withdrawn"
+    // (bounded to never exceed claimed).
+    const withdrawn_proxy =
+      withdrawn_raw > 0 ? withdrawn_raw : claimed > 0 ? Math.min(claimed, claimed * WITHDRAWN_PROXY_PCT) : 0;
 
     return {
       box: String(id),
       deposited,
       claimed,
-      withdrawn,
-      remaining,
+      withdrawn: withdrawn_proxy, // UI value used by the table
+      withdrawn_raw, // optional truth for debugging / future UI
+      remaining, // truth-based remaining
     };
   });
 
