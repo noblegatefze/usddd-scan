@@ -17,7 +17,7 @@ const TABLE_ACCOUNTING = "dd_box_accounting";
 // This does NOT write to DB and does NOT affect any protocol logic.
 const WITHDRAWN_PROXY_PCT = 0.15;
 
-type BoxRow = { id: string | number | null };
+type BoxRow = { id: string | number | null; meta?: any };
 
 type AccountingRow = {
   box_id: string | number | null;
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
   // 1) Get boxes (ids + any minimal metadata)
   const { data: boxes, error: bErr } = await supabase
     .from(TABLE_BOXES)
-    .select("id")
+    .select("id, meta")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -56,6 +56,11 @@ export async function GET(req: Request) {
 
   const typedBoxes = (boxes ?? []) as BoxRow[];
   const ids = typedBoxes.map((b) => b.id).filter((v): v is string | number => v !== null && v !== undefined);
+  const metaById: Record<string, any> = {};
+  for (const b of typedBoxes) {
+    if (b?.id == null) continue;
+    metaById[String(b.id)] = (b as any).meta ?? {};
+  }
 
   if (ids.length === 0) {
     return NextResponse.json({ ok: true, rows: [] });
@@ -80,6 +85,8 @@ export async function GET(req: Request) {
 
   const rows = ids.map((id) => {
     const a = accMap[String(id)];
+    const meta = metaById[String(id)] ?? {};
+    const cmc_id = typeof meta?.cmc_id === "number" ? meta.cmc_id : null;
     const deposited = toNum(a?.deposited_total);
     const withdrawn_raw = toNum(a?.withdrawn_total);
     const claimed = toNum(a?.claimed_unwithdrawn);
@@ -94,6 +101,7 @@ export async function GET(req: Request) {
 
     return {
       box: String(id),
+      cmc_id,
       deposited,
       claimed,
       withdrawn: withdrawn_proxy, // UI value used by the table
