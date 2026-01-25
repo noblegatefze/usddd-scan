@@ -843,6 +843,24 @@ export default function Home() {
         </div>
       </ScanModal>
 
+      <ScanModal
+        open={modal.open && modal.key === "boxes"}
+        title="View all boxes"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p className="text-slate-300">
+            Box Balances live in the Terminal. Use DIG → Treasure to browse sponsor boxes and inventories.
+          </p>
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            Terminal command: <span className="font-mono text-slate-200">dig</span> → choose{" "}
+            <span className="font-mono text-slate-200">Treasure (2)</span>
+          </div>
+        </div>
+      </ScanModal>
+
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-4 md:grid-cols-12">
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
@@ -861,14 +879,13 @@ export default function Home() {
                 <div className="hidden md:flex">
                   <GoldenPulsePills />
                 </div>
-                <a
-                  href={LINKS.terminal}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => openModal("boxes")}
                   className="text-[11px] text-slate-400 hover:text-slate-200"
                 >
                   View all
-                </a>
+                </button>
               </div>
             </div>
 
