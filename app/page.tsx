@@ -498,7 +498,7 @@ function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
   );
 }
 
-function GoldenWinnersLeaderboard() {
+function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
   const [rows, setRows] = React.useState<GoldenWinnersRow[]>([]);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -523,7 +523,7 @@ function GoldenWinnersLeaderboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshTick]);
 
   if (err) {
     return (
@@ -957,8 +957,6 @@ export default function Home() {
               </button>
             </div>
 
-            function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
-
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
               <button
@@ -989,7 +987,7 @@ export default function Home() {
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
                 <div className="text-slate-200">Golden winners</div>
                 <div className="mt-1 text-[12px] text-slate-400">Top by wins / USD</div>
-                <GoldenWinnersLeaderboard />
+                <GoldenWinnersLeaderboard refreshTick={refreshTick} />
               </div>
             </div>
           </section>
