@@ -566,6 +566,7 @@ function ScanModal({
   children,
   primaryLabel,
   primaryHref,
+  primaryNewTab = true,
   secondaryLabel = "Close",
   onClose,
 }: {
@@ -574,6 +575,7 @@ function ScanModal({
   children: React.ReactNode;
   primaryLabel?: string;
   primaryHref?: string;
+  primaryNewTab?: boolean;
   secondaryLabel?: string;
   onClose: () => void;
 }) {
@@ -618,8 +620,7 @@ function ScanModal({
           {primaryLabel && primaryHref ? (
             <a
               href={primaryHref}
-              target="_blank"
-              rel="noreferrer"
+              {...(primaryNewTab ? { target: "_blank", rel: "noreferrer" } : {})}
               className="rounded-md border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-[12px] text-emerald-200 hover:bg-emerald-950/60"
             >
               {primaryLabel}
@@ -822,8 +823,9 @@ export default function Home() {
         open={modal.open && modal.key === "fund"}
         title="Fund Network"
         onClose={closeModal}
-        primaryLabel="Open Fund Network"
+        primaryLabel="Fund Network"
         primaryHref="https://usddd.digdug.do/fund"
+        primaryNewTab={false}
       >
         <div className="space-y-3">
           <p>
