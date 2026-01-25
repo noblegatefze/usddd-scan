@@ -645,7 +645,7 @@ function ScanModal({
 export default function Home() {
   const [meta, setMeta] = React.useState<BuildMeta | null>(null);
 
-  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet";
+  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden";
   const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({ open: false, key: null });
 
   const openModal = (key: ModalKey) => setModal({ open: true, key });
@@ -861,6 +861,43 @@ export default function Home() {
         </div>
       </ScanModal>
 
+      <ScanModal
+        open={modal.open && modal.key === "golden"}
+        title="Golden Finds"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p>
+            Golden Finds are the network’s limited daily wins — rare, time-based rewards that appear inside the DIG flow. When a Golden Find is hit,
+            it’s recorded publicly here on Scan.
+          </p>
+
+          <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
+            <div className="text-[12px] font-semibold text-amber-200">How to hunt Golden Finds</div>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12px] text-amber-100/90">
+              <li>Open the Terminal.</li>
+              <li>
+                Type: <span className="font-mono text-amber-50">dig</span>
+              </li>
+              <li>Follow the prompts and watch for Golden activity.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            <div className="font-semibold text-slate-200">Where updates happen</div>
+            <div className="mt-1 text-slate-400">
+              Live drops, rules, and announcements are posted in Telegram as we tune the protocol through Zero Phase.
+            </div>
+          </div>
+
+          <p className="text-slate-400">
+            Tip: Golden Finds are capped daily (see “Golden today” at the top). If you want to stay ahead of the wave, keep Scan open and join Telegram.
+          </p>
+        </div>
+      </ScanModal>
+
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-4 md:grid-cols-12">
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
@@ -881,7 +918,7 @@ export default function Home() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => openModal("boxes")}
+                  onClick={() => openModal("golden")}
                   className="text-[11px] text-slate-400 hover:text-slate-200"
                 >
                   View all
@@ -915,14 +952,13 @@ export default function Home() {
           <section className="md:col-span-8 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-200">Box Balances</h2>
-              <a
-                href={LINKS.terminal}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => openModal("boxes")}
                 className="text-[11px] text-slate-400 hover:text-slate-200"
               >
                 View all
-              </a>
+              </button>
             </div>
 
             <BoxBalancesTable />
