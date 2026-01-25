@@ -447,16 +447,6 @@ export default function FundNetworkPage() {
     return Number.isFinite(total) ? total : principal;
   }
 
-  const yourTotalUsdt = visibleDbPositions.reduce((acc, p) => {
-    const v = Number(p.funded_usdt ?? 0);
-    return Number.isFinite(v) ? acc + v : acc;
-  }, 0);
-
-  const yourTotalAllocated = visibleDbPositions.reduce((acc, p) => {
-    const v = Number(p.usddd_allocated ?? 0);
-    return Number.isFinite(v) ? acc + v : acc;
-  }, 0);
-
   const dismissedSet = React.useMemo(() => new Set(dismissedRefs), [dismissedRefs]);
 
   const visibleDbPositions = React.useMemo(() => {
@@ -466,6 +456,16 @@ export default function FundNetworkPage() {
       return true;
     });
   }, [dbPositions, dismissedSet, hideAwaiting]);
+
+  const yourTotalUsdt = visibleDbPositions.reduce((acc, p) => {
+    const v = Number(p.funded_usdt ?? 0);
+    return Number.isFinite(v) ? acc + v : acc;
+  }, 0);
+
+  const yourTotalAllocated = visibleDbPositions.reduce((acc, p) => {
+    const v = Number(p.usddd_allocated ?? 0);
+    return Number.isFinite(v) ? acc + v : acc;
+  }, 0);
 
   async function issueNewPosition() {
     if (!ack) return;
@@ -942,8 +942,7 @@ export default function FundNetworkPage() {
 
                     {bindErr && <div className="mt-2 text-[12px] text-amber-200">{bindErr}</div>}
                     <div className="mt-2 text-[11px] text-slate-500">
-                      Tip: open Terminal in a separate tab, log in, then copy your current session_id (we&apos;ll add a UI
-                      button later).
+                      Tip: open Terminal in a separate tab, log in, then copy your current session_id.
                     </div>
                   </div>
 
