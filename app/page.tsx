@@ -901,7 +901,7 @@ export default function Home() {
               <h2 className="text-sm font-semibold text-slate-200">Network Activity (24h)</h2>
               <span className="text-[11px] text-slate-400">live</span>
             </div>
-            <NetworkActivityCard />
+            <NetworkActivityCard refreshTick={refreshTick} />
           </section>
 
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
@@ -957,7 +957,7 @@ export default function Home() {
               </button>
             </div>
 
-            <BoxBalancesTable refreshTick={refreshTick} />
+            function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
