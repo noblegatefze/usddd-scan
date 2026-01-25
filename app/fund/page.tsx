@@ -447,12 +447,12 @@ export default function FundNetworkPage() {
     return Number.isFinite(total) ? total : principal;
   }
 
-  const yourTotalUsdt = dbPositions.reduce((acc, p) => {
+  const yourTotalUsdt = visibleDbPositions.reduce((acc, p) => {
     const v = Number(p.funded_usdt ?? 0);
     return Number.isFinite(v) ? acc + v : acc;
   }, 0);
 
-  const yourTotalAllocated = dbPositions.reduce((acc, p) => {
+  const yourTotalAllocated = visibleDbPositions.reduce((acc, p) => {
     const v = Number(p.usddd_allocated ?? 0);
     return Number.isFinite(v) ? acc + v : acc;
   }, 0);
@@ -1128,7 +1128,7 @@ export default function FundNetworkPage() {
                 <div className="mt-2 grid gap-2">
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-slate-500">Positions</span>
-                    <span className="text-slate-200">{dbPositions.length}</span>
+                    <span className="text-slate-200">{visibleDbPositions.length}</span>
                   </div>
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-slate-500">USDT funded</span>
