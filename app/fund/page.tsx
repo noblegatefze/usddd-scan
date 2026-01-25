@@ -263,6 +263,7 @@ export default function FundNetworkPage() {
   const [hideAwaiting, setHideAwaiting] = React.useState(true);
   const [dismissedRefs, setDismissedRefs] = React.useState<string[]>([]);
   const [dismissModal, setDismissModal] = React.useState<{ open: boolean; ref: string }>({ open: false, ref: "" });
+  const [helpModalOpen, setHelpModalOpen] = React.useState(false);
 
   // local receipts (immediate UX)
   const [positions, setPositions] = React.useState<IssuedPosition[]>([]);
@@ -670,7 +671,16 @@ export default function FundNetworkPage() {
 
           <div className="hidden lg:flex flex-1 justify-center">
             <div className="w-[520px] rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-              Fund Network - private funding console...
+              <div className="relative">
+                <span>Fund Network - private funding console...</span>
+                <button
+                  type="button"
+                  onClick={() => setHelpModalOpen(true)}
+                  className="absolute inset-0"
+                  aria-label="Open help"
+                  title="How Fund Network works"
+                />
+              </div>
             </div>
           </div>
 
@@ -729,7 +739,16 @@ export default function FundNetworkPage() {
 
         <div className="lg:hidden border-t border-slate-800/40 px-4 py-2">
           <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-            Fund Network - private funding console...
+            <div className="relative">
+              <span>Fund Network - private funding console...</span>
+              <button
+                type="button"
+                onClick={() => setHelpModalOpen(true)}
+                className="absolute inset-0"
+                aria-label="Open help"
+                title="How Fund Network works"
+              />
+            </div>
           </div>
           <div className="mt-2 flex justify-between">
             <GoldenPulsePills />
@@ -827,6 +846,83 @@ export default function FundNetworkPage() {
             {confirmModal.stage === "success" ? (
               <div className="mt-3 text-[11px] text-slate-500">Returning to your positions…</div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {helpModalOpen ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setHelpModalOpen(false)}
+            aria-label="Close"
+          />
+
+          <div className="relative w-[92%] max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-sm font-semibold text-slate-100">How Fund Network works</div>
+
+              <button
+                type="button"
+                onClick={() => setHelpModalOpen(false)}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-3 text-[12px] leading-relaxed text-slate-300">
+              <p>
+                Fund Network lets you provision USDT (BEP-20) into the protocol’s funding layer. Each position issues a unique deposit address.
+                Once funded and verified, the protocol mints and allocates custodied USDDD to your position.
+              </p>
+
+              <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
+                <div className="text-[12px] font-semibold text-slate-200">Flow</div>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12px] text-slate-300">
+                  <li>Tick Understanding.</li>
+                  <li>Generate a unique deposit address.</li>
+                  <li>Send USDT (BEP-20) to that address.</li>
+                  <li>Protocol verifies and sweeps funds.</li>
+                  <li>USDDD is minted/allocated to your custodied position.</li>
+                  <li>Accrual begins and is reflected in your Total (Allocated + Accrued).</li>
+                </ol>
+              </div>
+
+              <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-emerald-200">
+                Custody during Zero Phase keeps the system stable while we harden flows. Withdrawals remain locked until admin unlock / Genesis rules.
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setHelpModalOpen(false)}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Close
+              </button>
+
+              <a
+                href="https://digdug.do"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Open Terminal
+              </a>
+
+              <a
+                href="https://t.me/digdugdo"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Join Telegram
+              </a>
+            </div>
           </div>
         </div>
       ) : null}
