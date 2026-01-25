@@ -957,6 +957,8 @@ export default function Home() {
               </button>
             </div>
 
+            <BoxBalancesTable refreshTick={refreshTick} />
+
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
               <button
