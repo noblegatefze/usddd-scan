@@ -1299,3 +1299,8 @@ export default function FundNetworkPage() {
               </table>
             </div>
           </section>
+        </div>
+      </div>
+    </main>
+  );
+}
