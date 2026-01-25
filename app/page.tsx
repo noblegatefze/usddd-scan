@@ -634,7 +634,7 @@ function ScanModal({
 export default function Home() {
   const [meta, setMeta] = React.useState<BuildMeta | null>(null);
 
-  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden";
+  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden" | "search";
   const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({ open: false, key: null });
 
   const openModal = (key: ModalKey) => setModal({ open: true, key });
@@ -694,8 +694,18 @@ export default function Home() {
           </div>
 
           <div className="hidden md:flex flex-1 justify-center">
-            <div className="w-[520px] rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-              Search claim code / box / user…
+            <div className="relative w-[520px]">
+              <div className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
+                Search claim code / box / user…
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openModal("search")}
+                className="absolute inset-0 rounded-md"
+                aria-label="Open quick-start"
+                title="Open quick-start"
+              />
             </div>
           </div>
 
@@ -755,8 +765,18 @@ export default function Home() {
 
         {/* Mobile search + pulse directly beneath (same line) */}
         <div className="md:hidden border-t border-slate-800/40 px-4 py-2">
-          <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-            Search claim code / box / user…
+          <div className="relative w-full">
+            <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
+              Search claim code / box / user…
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openModal("search")}
+              className="absolute inset-0 rounded-md"
+              aria-label="Open quick-start"
+              title="Open quick-start"
+            />
           </div>
           <div className="mt-2 flex justify-between">
             <GoldenPulsePills />
@@ -891,6 +911,62 @@ export default function Home() {
           <p className="text-slate-400">
             Tip: Golden Finds are capped daily (see “Golden today” at the top). If you want to stay ahead of the wave, keep Scan open and join Telegram.
           </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "search"}
+        title="Don’t search. DIG."
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p>
+            This is a live protocol surface — not a directory. The fastest way to understand USDDD is to interact with it:
+            DIG, sponsor boxes, or fund the network.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Three ways to join the network</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>
+                <span className="font-semibold text-slate-200">DIG</span> for rewards in the Terminal.
+                <span className="ml-2 font-mono text-slate-200">dig</span>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-200">Sponsor</span> a box and deploy rewards publicly on Scan.
+                <span className="ml-2 font-mono text-slate-200">create box</span>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-200">Fund</span> the network and receive custodied USDDD allocation.
+                <span className="ml-2 text-slate-200">/fund</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
+            USDDD is by the people, for the people — transparency first. If you want to be early, join Telegram and help shape Genesis.
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            <a
+              href="https://usddd.digdug.do/fund"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+            >
+              Fund Network
+            </a>
+            <a
+              href={LINKS.telegram}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+            >
+              Join Telegram
+            </a>
+          </div>
         </div>
       </ScanModal>
 
