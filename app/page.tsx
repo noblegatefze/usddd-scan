@@ -826,6 +826,23 @@ export default function Home() {
         </div>
       </ScanModal>
 
+      <ScanModal
+        open={modal.open && modal.key === "sponsor"}
+        title="Become a Sponsor"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p className="text-slate-300">
+            Sponsor boxes deploy rewards to the network and surface publicly on Scan. Full sponsor guide coming next.
+          </p>
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            Terminal command: <span className="font-mono text-slate-200">create box</span>
+          </div>
+        </div>
+      </ScanModal>
+
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-4 md:grid-cols-12">
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
@@ -895,14 +912,13 @@ export default function Home() {
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
-              <a
-                href={LINKS.terminal}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => openModal("sponsor")}
                 className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
               >
                 Become a Sponsor
-              </a>
+              </button>
               <a
                 href={LINKS.docs}
                 target="_blank"
