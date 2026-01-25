@@ -315,9 +315,9 @@ function NetworkActivityCard() {
 
         <button
           type="button"
-          disabled
-          className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-400 opacity-70 cursor-not-allowed"
-          title="Coming soon"
+          onClick={() => (window as any).__openScanModal?.("fund")}
+          className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+          title="Fund the network"
         >
           Fund Network
         </button>
@@ -671,6 +671,18 @@ export default function Home() {
     };
   }, []);
 
+  React.useEffect(() => {
+    (window as any).__openScanModal = (key: ModalKey) => openModal(key);
+    return () => {
+      try {
+        delete (window as any).__openScanModal;
+      } catch {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#0b0f14] text-slate-200">
       <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-[#0b0f14]/90 backdrop-blur">
@@ -782,6 +794,34 @@ export default function Home() {
 
           <p className="text-slate-400">
             Most rewards in testnet are mock for testing. Genesis Phase is the mainnet transition where reward rules become final and funding expands.
+          </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "fund"}
+        title="Fund Network"
+        onClose={closeModal}
+        primaryLabel="Open Fund Network"
+        primaryHref="https://usddd.digdug.do/fund"
+      >
+        <div className="space-y-3">
+          <p>
+            Funding the network means you provision USDT (BEP-20) into the protocol’s funding layer. In return, the protocol allocates custodied
+            USDDD tied to network performance and the current Accrual Reference.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Benefits</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>Dedicated deposit address per position (traceable and auditable).</li>
+              <li>Custodied USDDD allocation tracked and surfaced on Scan.</li>
+              <li>Accrual is protocol-defined and observable (no hidden calculations).</li>
+            </ul>
+          </div>
+
+          <p className="text-slate-400">
+            Withdrawals remain locked during Zero Phase while we harden the system. Genesis unlock rules will be announced in Docs and Telegram.
           </p>
         </div>
       </ScanModal>
