@@ -877,7 +877,7 @@ export default function FundNetworkPage() {
       ) : null}
 
       <div className="mx-auto max-w-6xl px-4 pt-6 pb-24">
-        <div className="grid gap-4 md:grid-cols-12">
+        <div className="grid min-w-0 gap-4 md:grid-cols-12">
           <section className="md:col-span-7 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-3">
               <h1 className="text-base font-semibold text-slate-100">Fund Network</h1>
@@ -1177,7 +1177,7 @@ export default function FundNetworkPage() {
             </div>
           </section>
 
-          <section id="positions" className="md:col-span-12 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+          <section id="positions" className="md:col-span-12 min-w-0 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-slate-200">
                 {bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}
@@ -1198,7 +1198,7 @@ export default function FundNetworkPage() {
             </div>
 
             {/* Etherscan-style: full-bleed horizontal scroller on mobile, normal on desktop */}
-            <div className="-mx-4 md:mx-0 overflow-x-auto overscroll-x-contain px-4 md:px-0">
+            <div className="-mx-4 md:mx-0 min-w-0 overflow-x-auto overscroll-x-contain px-4 md:px-0">
               <table className="min-w-[860px] w-full text-[12px]">
                 <thead className="text-slate-400">
                   <tr className="border-b border-slate-800/60">
