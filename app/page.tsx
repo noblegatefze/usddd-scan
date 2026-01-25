@@ -571,8 +571,85 @@ function GoldenWinnersLeaderboard() {
   );
 }
 
+function ScanModal({
+  open,
+  title,
+  children,
+  primaryLabel,
+  primaryHref,
+  secondaryLabel = "Close",
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  primaryLabel?: string;
+  primaryHref?: string;
+  secondaryLabel?: string;
+  onClose: () => void;
+}) {
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div className="text-sm font-semibold text-slate-100">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-3 text-[12px] leading-relaxed text-slate-300">{children}</div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+          >
+            {secondaryLabel}
+          </button>
+
+          {primaryLabel && primaryHref ? (
+            <a
+              href={primaryHref}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-[12px] text-emerald-200 hover:bg-emerald-950/60"
+            >
+              {primaryLabel}
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [meta, setMeta] = React.useState<BuildMeta | null>(null);
+
+  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet";
+  const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({ open: false, key: null });
+
+  const openModal = (key: ModalKey) => setModal({ open: true, key });
+  const closeModal = () => setModal({ open: false, key: null });
 
   React.useEffect(() => {
     let cancelled = false;
@@ -615,9 +692,14 @@ export default function Home() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+            <button
+              type="button"
+              onClick={() => openModal("testnet")}
+              className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-950/60"
+              title="About Testnet"
+            >
               Testnet
-            </span>
+            </button>
             <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300">
               LIVE
             </span>
@@ -673,6 +755,36 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      <ScanModal
+        open={modal.open && modal.key === "testnet"}
+        title="Zero Phase Testnet"
+        onClose={closeModal}
+        primaryLabel="Join Telegram"
+        primaryHref={LINKS.telegram}
+      >
+        <div className="space-y-3">
+          <p>
+            You’re viewing the public Zero Phase testnet. Real users are actively exercising the protocol while we monitor network activity,
+            tighten rules, and eliminate broken flows.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">What’s real right now</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>Live network activity and telemetry on Scan.</li>
+              <li>Protocol actions and claim execution paths.</li>
+              <li>
+                <span className="font-semibold">Golden Finds</span> funded by protocol/sponsors.
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-slate-400">
+            Most rewards in testnet are mock for testing. Genesis Phase is the mainnet transition where reward rules become final and funding expands.
+          </p>
+        </div>
+      </ScanModal>
 
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-4 md:grid-cols-12">
