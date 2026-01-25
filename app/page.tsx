@@ -477,19 +477,8 @@ function BoxBalancesTable() {
             ) : (
               rows.map((r) => (
                 <tr key={r.box} className="border-b border-slate-800/40">
-                  <td className="py-2 pr-2 font-mono truncate">
-                    {r.cmc_id ? (
-                      <a
-                        href={`https://coinmarketcap.com/currencies/?id=${r.cmc_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline underline-offset-2 hover:text-slate-50"
-                      >
-                        {r.box}
-                      </a>
-                    ) : (
-                      r.box
-                    )}
+                  <td className="py-2 pr-2 font-mono truncate text-slate-200">
+                    {r.box}
                   </td>
                   <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.deposited)}</td>
                   <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.claimed)}</td>
