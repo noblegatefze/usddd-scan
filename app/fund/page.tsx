@@ -659,7 +659,11 @@ export default function FundNetworkPage() {
     <main className="min-h-screen w-full overflow-x-hidden bg-[#0b0f14] text-slate-200">
       <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-[#0b0f14]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
+          <a
+            href="https://usddd.digdug.do"
+            className="flex items-center gap-2 hover:opacity-90"
+            title="Back to USDDD Scan"
+          >
             <div className="relative h-7 w-7 overflow-hidden rounded-full border border-slate-800 bg-slate-950/40">
               <Image src="/logo.png" alt="USDDD" fill sizes="28px" className="object-cover" />
             </div>
@@ -667,7 +671,7 @@ export default function FundNetworkPage() {
               <div className="text-sm font-semibold tracking-wide">USDDD Scan</div>
               <div className="text-[11px] text-slate-400">powered by DIGDUG.DO</div>
             </div>
-          </div>
+          </a>
 
           <div className="hidden lg:flex flex-1 justify-center">
             <div className="w-[520px] rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
