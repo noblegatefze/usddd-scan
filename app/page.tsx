@@ -165,7 +165,7 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
   );
 }
 
-function NetworkActivityCard() {
+function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -186,7 +186,7 @@ function NetworkActivityCard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshTick]);
 
   const fmtPct2 = (n: number) => `${(Number.isFinite(n) ? n : 0).toFixed(2)}%`;
   const fmtSigned = (n: number) => {
@@ -344,7 +344,7 @@ function NetworkActivityCard() {
   );
 }
 
-function LatestGoldenFindsTable() {
+function LatestGoldenFindsTable({ refreshTick }: { refreshTick: number }) {
   const [rows, setRows] = React.useState<GoldenFindRow[]>([]);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -369,7 +369,7 @@ function LatestGoldenFindsTable() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshTick]);
 
   if (err) {
     return (
@@ -418,7 +418,7 @@ function LatestGoldenFindsTable() {
   );
 }
 
-function BoxBalancesTable() {
+function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
   const [rows, setRows] = React.useState<BoxBalanceRow[]>([]);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -443,7 +443,7 @@ function BoxBalancesTable() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshTick]);
 
   if (err) {
     return (
@@ -640,6 +640,13 @@ export default function Home() {
   const openModal = (key: ModalKey) => setModal({ open: true, key });
   const closeModal = () => setModal({ open: false, key: null });
 
+  const [refreshTick, setRefreshTick] = React.useState(0);
+
+  React.useEffect(() => {
+    const t = setInterval(() => setRefreshTick((v) => v + 1), 20000);
+    return () => clearInterval(t);
+  }, []);
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -701,7 +708,7 @@ export default function Home() {
             >
               Testnet
             </button>
-            <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300">
+            <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300 animate-pulse">
               LIVE
             </span>
           </div>
@@ -915,7 +922,7 @@ export default function Home() {
               </div>
             </div>
 
-            <LatestGoldenFindsTable />
+            <LatestGoldenFindsTable refreshTick={refreshTick} />
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Use the Terminal to DIG and earn rewards.</div>
@@ -950,7 +957,7 @@ export default function Home() {
               </button>
             </div>
 
-            <BoxBalancesTable />
+            <BoxBalancesTable refreshTick={refreshTick} />
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
