@@ -1193,72 +1193,12 @@ export default function FundNetworkPage() {
                   {hideAwaiting ? "Hide Awaiting: ON" : "Hide Awaiting: OFF"}
                 </button>
 
-                <div className="text-[11px] text-slate-500">
-                  {loadingDb ? "Refreshing…" : "Withdraw shown but locked"}
-                </div>
+                <div className="text-[11px] text-slate-500">{loadingDb ? "Refreshing…" : "Withdraw shown but locked"}</div>
               </div>
             </div>
-            <div className="md:hidden space-y-2">
-              {visibleDbPositions.length === 0 ? (
-                <div className="py-3 text-[12px] text-slate-500">No positions yet.</div>
-              ) : (
-                visibleDbPositions.map((p) => {
-                  const stage = statusToStage(p.status);
-                  const total = computeAccruedTotalUsddd(p);
-                  return (
-                    <div key={p.id} className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-semibold text-slate-200">{p.position_ref}</div>
-                          <div className="mt-1 text-[11px] text-slate-500">
-                            {p.issued_deposit_address.slice(0, 10)}…{p.issued_deposit_address.slice(-6)}
-                          </div>
-                        </div>
-                        <div className="shrink-0 ml-auto text-right">
-                          <div className="text-[11px] text-slate-500">Funded</div>
-                          <div className="text-[13px] text-slate-200">
-                            {Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "—"}
-                          </div>
-                        </div>
-                      </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
-                        <div>
-                          <div className="text-slate-500">Allocated</div>
-                          <div className="text-slate-200">{p.usddd_allocated == null ? "-" : Number(p.usddd_allocated).toFixed(2)}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-slate-500">Total</div>
-                          <div className="text-slate-200">{total == null ? "-" : fmtDec(total, 4)}</div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-start gap-2">
-                        <div className="min-w-0">
-                          <div className="text-[12px] text-slate-200">{stage.title}</div>
-                          <div className="text-[11px] text-slate-500 truncate">{stage.hint}</div>
-                        </div>
-                        <div className="min-w-0 flex flex-wrap items-center gap-2 overflow-hidden">
-                          {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}
-                          <span className="text-slate-700">•</span>
-                          {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}
-                          <button
-                            type="button"
-                            disabled
-                            className="ml-2 rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
-                            title="Locked until admin unlock"
-                          >
-                            Locked
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="hidden md:block overflow-x-auto">
+            {/* Etherscan-style: full-bleed horizontal scroller on mobile, normal on desktop */}
+            <div className="-mx-4 md:mx-0 overflow-x-auto overscroll-x-contain px-4 md:px-0">
               <table className="min-w-[860px] w-full text-[12px]">
                 <thead className="text-slate-400">
                   <tr className="border-b border-slate-800/60">
@@ -1274,6 +1214,7 @@ export default function FundNetworkPage() {
                     <th className="py-2 pl-2 text-right font-medium">Withdraw</th>
                   </tr>
                 </thead>
+
                 <tbody className="text-slate-200">
                   {visibleDbPositions.length === 0 ? (
                     <tr>
@@ -1287,39 +1228,46 @@ export default function FundNetworkPage() {
                       return (
                         <tr key={p.id} className="border-b border-slate-800/40 align-top">
                           <td className="py-2 pr-4">{p.position_ref}</td>
+
                           <td className="py-2 pr-4 font-mono break-all text-[11px] text-slate-300">
                             {p.issued_deposit_address.slice(0, 10)}…{p.issued_deposit_address.slice(-6)}
                           </td>
-                          <td className="py-2 pr-4 text-right">
-                            {Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "—"}
+
+                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "—"}</td>
+
+                          <td className="py-2 pr-4">
+                            {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}
                           </td>
-                          <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
-                          <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}</td>
+
+                          <td className="py-2 pr-4">
+                            {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}
+                          </td>
+
                           <td className="py-2 pr-4">
                             {p.gas_topup_tx_hash ? (
                               <div className="text-[11px]">
                                 <TxLink hash={p.gas_topup_tx_hash} />
-                                <div className="text-slate-500">
-                                  {Number(p.gas_topup_bnb ?? 0) ? `${fmtDec(Number(p.gas_topup_bnb), 6)} BNB` : ""}
-                                </div>
+                                <div className="text-slate-500">{Number(p.gas_topup_bnb ?? 0) ? `${fmtDec(Number(p.gas_topup_bnb), 6)} BNB` : ""}</div>
                               </div>
                             ) : (
                               <span className="text-slate-600">—</span>
                             )}
                           </td>
-                          <td className="py-2 pr-4 text-right">
-                            {p.usddd_allocated == null ? "-" : Number(p.usddd_allocated).toFixed(2)}
-                          </td>
+
+                          <td className="py-2 pr-4 text-right">{p.usddd_allocated == null ? "-" : Number(p.usddd_allocated).toFixed(2)}</td>
+
                           <td className="py-2 pr-4 text-right">
                             {(() => {
                               const total = computeAccruedTotalUsddd(p);
                               return total == null ? "-" : fmtDec(total, 4);
                             })()}
                           </td>
+
                           <td className="py-2 pr-2">
                             <div className="text-slate-200">{stage.title}</div>
                             <div className="text-[11px] text-slate-500">{stage.hint}</div>
                           </td>
+
                           <td className="py-2 pl-2 text-right">
                             <div className="flex items-center justify-end gap-2">
                               {String(p.status) === "awaiting_funds" && !p.deposit_tx_hash ? (
@@ -1351,8 +1299,3 @@ export default function FundNetworkPage() {
               </table>
             </div>
           </section>
-        </div>
-      </div>
-    </main>
-  );
-}
