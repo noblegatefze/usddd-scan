@@ -42,12 +42,23 @@ export async function GET() {
         },
       }
     );
-  } catch (e) {
+  } catch (e: any) {
+    console.error("activity/24h RPC FAILED", {
+      message: e?.message,
+      name: e?.name,
+      details: e?.details,
+      hint: e?.hint,
+      code: e?.code,
+      cause: e?.cause,
+      stack: e?.stack,
+    });
+
     // HARD SAFE FALLBACK (never break Scan again)
     return NextResponse.json(
       {
         ok: true,
         mode: "safe_fallback",
+        error: e?.message ?? "unknown",
         window: {
           start: start.toISOString(),
           end: end.toISOString(),
