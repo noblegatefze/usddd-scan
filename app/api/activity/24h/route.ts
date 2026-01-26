@@ -12,8 +12,13 @@ export async function GET() {
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
 
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabaseUrl =
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRole =
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
+
+    if (!supabaseUrl) throw new Error("SUPABASE_URL is required.");
+    if (!serviceRole) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required.");
 
     const supabase = createClient(supabaseUrl, serviceRole, {
       auth: { persistSession: false },
