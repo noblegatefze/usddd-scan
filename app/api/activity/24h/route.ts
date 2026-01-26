@@ -99,7 +99,7 @@ export async function GET() {
   // Sessions (24h) from dd_sessions
   const sessionsReq = supabase
     .from(TABLE_SESSIONS)
-    .select("session_id", { count: "exact", head: true })
+    .select("session_id", { head: true })
     .gte(TS_COL, startIso)
     .lt(TS_COL, endIso);
 
@@ -165,7 +165,7 @@ export async function GET() {
   const rawPerf = (accrualPotentialPct / ACCRUAL_CAP_PCT) * 100;
   const networkPerformancePct = Math.min(NET_PERF_CAP_PCT, Math.max(0, rawPerf));
 
-  const sessions24h = sessions.count ?? 0;
+  const sessions24h = 0; // temp: remove exact count to prevent DB timeouts
 
   // Protocol actions (composite)
   const protocolActions =
