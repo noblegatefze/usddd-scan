@@ -46,7 +46,6 @@ export async function GET(req: Request) {
   const { data: boxes, error: bErr } = await supabase
     .from(TABLE_BOXES)
     .select("id, meta")
-    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (bErr) {
