@@ -11,7 +11,6 @@ const SUPABASE_URL = reqEnv("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 const TABLE_BOXES = "dd_boxes";
-const TABLE_ACCOUNTING = "dd_box_accounting";
 
 // UI-only: if withdrawn_total is 0 but claimed exists, show a proxy withdrawn for nicer Scan display.
 // This does NOT write to DB and does NOT affect any protocol logic.
@@ -66,22 +65,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, rows: [] });
   }
 
-  // 2) Pull accounting for these boxes
-  const { data: accRows, error: aErr } = await supabase
-    .from(TABLE_ACCOUNTING)
-    .select("box_id,deposited_total,withdrawn_total,claimed_unwithdrawn")
-    .in("box_id", ids);
-
-  if (aErr) {
-    return NextResponse.json({ ok: false, error: aErr.message }, { status: 500 });
-  }
-
-  const typedAcc = (accRows ?? []) as AccountingRow[];
-
+  // 2) TEMP SAFE MODE: skip dd_box_accounting view (can be expensive under load).
+  // We will reintroduce accounting via an RPC over dd_box_ledger once stable.
   const accMap: Record<string, AccountingRow> = {};
-  for (const r of typedAcc) {
-    accMap[String(r.box_id ?? "")] = r;
-  }
 
   const rows = ids.map((id) => {
     const a = accMap[String(id)];
