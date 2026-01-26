@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes, createHash, createCipheriv } from "crypto";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -40,6 +40,15 @@ export async function POST() {
     const encSecret = env("FUND_KEY_ENC_SECRET");
 
     const sb = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+
+    // Maintenance gate (DB-authoritative)
+    const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
+    if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    const row: any = Array.isArray(flags) ? flags[0] : flags;
+    if (row && (row.pause_all || row.pause_reserve)) {
+      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    }
+
 
     // Generate dedicated EOA deposit address for this position
     const priv = generatePrivateKey();

@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createPublicClient, http, parseAbiItem, Hex, formatUnits } from "viem";
 
@@ -22,6 +22,15 @@ export async function GET(req: Request) {
     const supabaseUrl = env("SUPABASE_URL");
     const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
     const sb = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+
+    // Maintenance gate (DB-authoritative)
+    const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
+    if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    const row: any = Array.isArray(flags) ? flags[0] : flags;
+    if (row && (row.pause_all || row.pause_reserve)) {
+      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    }
+
 
     const rpcUrl = env("BSC_RPC_URL");
     const usdt = env("BSC_USDT_ADDRESS").toLowerCase() as Hex;

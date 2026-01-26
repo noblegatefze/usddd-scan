@@ -48,6 +48,12 @@ export async function GET(req: Request) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
+  // Maintenance gate (DB-authoritative)
+  const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
+  if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+  const row: any = Array.isArray(flags) ? flags[0] : flags;
+  if (row && row.pause_all) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+
 
   // Pull a reasonable recent window to compute leaders (keeps it fast).
   // We'll use last 30 days by default; adjust later if you want "all-time".

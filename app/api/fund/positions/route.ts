@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 function env(name: string): string {
@@ -17,6 +17,14 @@ export async function POST(req: Request) {
     const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { persistSession: false },
     });
+    // Maintenance gate (DB-authoritative)
+    const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
+    if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    const row: any = Array.isArray(flags) ? flags[0] : flags;
+    if (row && row.pause_all) {
+      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    }
+
 
     // Mode A: session_id -> resolve terminal user -> return all bound positions
     if (session_id) {

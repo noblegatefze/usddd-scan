@@ -52,6 +52,14 @@ export async function POST(req: Request) {
     const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { persistSession: false },
     });
+    // Maintenance gate (DB-authoritative)
+    const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
+    if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    const row: any = Array.isArray(flags) ? flags[0] : flags;
+    if (row && (row.pause_all || row.pause_reserve)) {
+      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    }
+
 
     const { data: pos, error: posErr } = await sb
       .from("fund_positions")

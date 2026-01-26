@@ -18,6 +18,12 @@ function todayUTC(): string {
 }
 
 export async function GET() {
+  // Maintenance gate (DB-authoritative)
+  const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
+  if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+  const row: any = Array.isArray(flags) ? flags[0] : flags;
+  if (row && row.pause_all) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+
   try {
     const day = todayUTC();
 

@@ -17,6 +17,28 @@ function isRpcErr(v: unknown): v is RpcErr {
 }
 
 export async function GET() {
+  // Maintenance gate (DB-authoritative)
+  try {
+    const fr = await fetch(`${SUPABASE_URL}/rest/v1/rpc/rpc_admin_flags`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+
+    const ft = await fr.text();
+    const fj = ft ? JSON.parse(ft) : null;
+
+    if (fr.ok && fj && typeof fj === "object" && Boolean((fj as any).pause_all)) {
+      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    }
+  } catch {
+    // If flags cannot be read, fail closed (maintenance).
+    return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+  }
   // Call the same RPC used by digdug-terminal: /rest/v1/rpc/stats_summary
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/stats_summary`, {
     method: "POST",

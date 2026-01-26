@@ -23,6 +23,14 @@ export async function GET() {
     const supabase = createClient(supabaseUrl, serviceRole, {
       auth: { persistSession: false },
     });
+    // Maintenance gate (DB-authoritative)
+    const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
+    if (flagsErr) throw flagsErr;
+    const row: any = Array.isArray(flags) ? flags[0] : flags;
+    if (row && row.pause_all) {
+      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+    }
+
 
     const { data, error } = await supabase.rpc("scan_activity_24h_v2", {
       start_ts: iso(start),
