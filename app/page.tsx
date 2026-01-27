@@ -209,7 +209,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   if (!data) {
     return (
       <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[13px] text-slate-300">
-        Loading activityâ€¦
+        Loading activity…
       </div>
     );
   }
@@ -248,7 +248,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
   return (
     <div className="space-y-3">
-      {/* 3Ã—3 on desktop, 2 columns on mobile */}
+      {/* 3×3 on desktop, 2 columns on mobile */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
         {/* Row 1 */}
         <Tile
@@ -291,7 +291,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
         {/* Row 3 */}
         <Tile
           title="Accrual Potential"
-          desc="Derived from efficiency (Ã— 3%)."
+          desc="Derived from efficiency (× 3%)."
           value={fmtPct2(accrualPotential)}
         />
         <Tile
@@ -400,7 +400,7 @@ function LatestGoldenFindsTable({ refreshTick }: { refreshTick: number }) {
             {rows.length === 0 ? (
               <tr className="border-b border-slate-800/40">
                 <td className="py-3 text-slate-400" colSpan={5}>
-                  Loadingâ€¦
+                  Loading…
                 </td>
               </tr>
             ) : (
@@ -474,7 +474,7 @@ function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
             {rows.length === 0 ? (
               <tr className="border-b border-slate-800/40">
                 <td className="py-3 text-slate-400" colSpan={5}>
-                  Loadingâ€¦
+                  Loading…
                 </td>
               </tr>
             ) : (
@@ -537,7 +537,7 @@ function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
   }
 
   if (rows.length === 0) {
-    return <div className="mt-2 text-[12px] text-slate-400">Loadingâ€¦</div>;
+    return <div className="mt-2 text-[12px] text-slate-400">Loading…</div>;
   }
 
   return (
@@ -605,7 +605,7 @@ function ScanModal({
             className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
             aria-label="Close"
           >
-            âœ•
+            ✕
           </button>
         </div>
 
@@ -720,7 +720,7 @@ export default function Home() {
           <div className="hidden md:flex flex-1 justify-center">
             <div className="relative w-[520px]">
               <div className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-                Search claim code / box / userâ€¦
+                Search claim code / box / user…
               </div>
 
               <button
@@ -789,7 +789,7 @@ export default function Home() {
         <div className="md:hidden border-t border-slate-800/40 px-4 py-2">
           <div className="relative w-full">
             <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-              Search claim code / box / userâ€¦
+              Search claim code / box / user…
             </div>
 
             <button
