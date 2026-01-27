@@ -70,9 +70,26 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, rows: [] });
   }
 
-  // 2) TEMP SAFE MODE: skip dd_box_accounting view (can be expensive under load).
-  // We will reintroduce accounting via an RPC over dd_box_ledger once stable.
+    // 2) DB-authoritative accounting via RPC over dd_box_ledger
+  // (fast + safe under load)
+  const { data: accRows, error: accErr } = await supabase.rpc("scan_box_balances_v1", {
+    box_ids: ids.map(String),
+  });
+
+  if (accErr) {
+    return NextResponse.json({ ok: false, error: accErr.message }, { status: 500 });
+  }
+
   const accMap: Record<string, AccountingRow> = {};
+  for (const r of (accRows ?? []) as any[]) {
+    const key = String(r.box_id);
+    accMap[key] = {
+      box_id: r.box_id,
+      deposited_total: r.deposited_total,
+      withdrawn_total: r.withdrawn_total,
+      claimed_unwithdrawn: r.claimed_total, // map RPC claimed_total into existing shape
+    };
+  }
 
   const rows = ids.map((id) => {
     const a = accMap[String(id)];
@@ -82,7 +99,7 @@ export async function GET(req: Request) {
     const withdrawn_raw = toNum(a?.withdrawn_total);
     const claimed = toNum(a?.claimed_unwithdrawn);
 
-    // Keep remaining tied to raw accounting (truth), not the UI proxy.
+    // Truth-based remaining in token units
     const remaining = deposited - withdrawn_raw - claimed;
 
     // UI-only proxy: if raw withdrawn is 0 but there are claims, show 15% of claimed as "withdrawn"
@@ -95,11 +112,19 @@ export async function GET(req: Request) {
       cmc_id,
       deposited,
       claimed,
-      withdrawn: withdrawn_proxy, // UI value used by the table
-      withdrawn_raw, // optional truth for debugging / future UI
-      remaining, // truth-based remaining
+      withdrawn: withdrawn_proxy,
+      withdrawn_raw,
+      remaining,
     };
   });
 
-  return NextResponse.json({ ok: true, rows });
+  return NextResponse.json(
+    { ok: true, rows },
+    {
+      headers: {
+        // protect DB + smooth spikes
+        "cache-control": "public, s-maxage=30, stale-while-revalidate=120",
+      },
+    }
+  );
 }
