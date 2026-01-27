@@ -1,7 +1,9 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { getPublicFlags } from "./lib/flags";
+import { ScanMaintenance } from "./_maintenance/ScanMaintenance";
 
 type ActivityResp = {
   window: { start: string; end: string; hours: number };
@@ -68,7 +70,7 @@ function fmtUsd(n: number) {
 }
 
 function relTime(ts: string | null) {
-  if (!ts) return "—";
+  if (!ts) return "-";
   const t = new Date(ts).getTime();
   const now = Date.now();
   const s = Math.max(0, Math.floor((now - t) / 1000));
@@ -123,13 +125,14 @@ function formatHMS(ms: number): string {
 }
 
 function GoldenPulsePills({ className = "" }: { className?: string }) {
-  const [goldenTxt, setGoldenTxt] = React.useState<string>("—");
-  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("—"); // avoid hydration mismatch
+  const [goldenTxt, setGoldenTxt] = React.useState<string>("-");
+  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("-"); // avoid hydration mismatch
 
   React.useEffect(() => {
     const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
     tick();
     const t = setInterval(tick, 1000);
+
     return () => clearInterval(t);
   }, []);
 
@@ -206,7 +209,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   if (!data) {
     return (
       <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[13px] text-slate-300">
-        Loading activity…
+        Loading activityâ€¦
       </div>
     );
   }
@@ -245,7 +248,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
   return (
     <div className="space-y-3">
-      {/* 3×3 on desktop, 2 columns on mobile */}
+      {/* 3Ã—3 on desktop, 2 columns on mobile */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
         {/* Row 1 */}
         <Tile
@@ -288,7 +291,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
         {/* Row 3 */}
         <Tile
           title="Accrual Potential"
-          desc="Derived from efficiency (× 3%)."
+          desc="Derived from efficiency (Ã— 3%)."
           value={fmtPct2(accrualPotential)}
         />
         <Tile
@@ -397,16 +400,16 @@ function LatestGoldenFindsTable({ refreshTick }: { refreshTick: number }) {
             {rows.length === 0 ? (
               <tr className="border-b border-slate-800/40">
                 <td className="py-3 text-slate-400" colSpan={5}>
-                  Loading…
+                  Loadingâ€¦
                 </td>
               </tr>
             ) : (
               rows.map((r) => (
                 <tr key={r.claim ?? `${r.ts}-${r.token}`} className="border-b border-slate-800/40">
                   <td className="py-2 pr-2 text-slate-300">{relTime(r.ts)}</td>
-                  <td className="py-2 pr-2 font-mono text-slate-200 truncate">{r.claim ?? "—"}</td>
+                  <td className="py-2 pr-2 font-mono text-slate-200 truncate">{r.claim ?? "-"}</td>
                   <td className="py-2 pr-2 truncate">{r.winner}</td>
-                  <td className="hidden sm:table-cell py-2 pr-2 truncate">{r.token ?? "—"}</td>
+                  <td className="hidden sm:table-cell py-2 pr-2 truncate">{r.token ?? "-"}</td>
                   <td className="py-2 text-right tabular-nums">{fmtUsd(r.usd ?? 0)}</td>
                 </tr>
               ))
@@ -471,7 +474,7 @@ function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
             {rows.length === 0 ? (
               <tr className="border-b border-slate-800/40">
                 <td className="py-3 text-slate-400" colSpan={5}>
-                  Loading…
+                  Loadingâ€¦
                 </td>
               </tr>
             ) : (
@@ -534,7 +537,7 @@ function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
   }
 
   if (rows.length === 0) {
-    return <div className="mt-2 text-[12px] text-slate-400">Loading…</div>;
+    return <div className="mt-2 text-[12px] text-slate-400">Loadingâ€¦</div>;
   }
 
   return (
@@ -602,7 +605,7 @@ function ScanModal({
             className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
             aria-label="Close"
           >
-            ✕
+            âœ•
           </button>
         </div>
 
@@ -633,6 +636,20 @@ function ScanModal({
 }
 
 export default function Home() {
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const flags = await getPublicFlags();
+      if (!alive) return;
+      setPaused(Boolean(flags?.pause_all));
+    })();
+    return () => { alive = false; };
+  }, []);
+
+
+
   const [meta, setMeta] = React.useState<BuildMeta | null>(null);
 
   type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden" | "search";
@@ -680,7 +697,9 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return (
+  return paused ? (
+    <ScanMaintenance />
+  ) : (
     <main className="min-h-screen bg-[#0b0f14] text-slate-200">
       <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-[#0b0f14]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
@@ -701,7 +720,7 @@ export default function Home() {
           <div className="hidden md:flex flex-1 justify-center">
             <div className="relative w-[520px]">
               <div className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-                Search claim code / box / user…
+                Search claim code / box / userâ€¦
               </div>
 
               <button
@@ -733,11 +752,9 @@ export default function Home() {
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[12px] text-slate-400">
             <span>Phase: Zero</span>
             <span className="text-slate-600">·</span>
-            <span>Version: {meta?.version ?? "—"}</span>
+            <span>Version: {meta?.version ?? "--"}</span>
             <span className="text-slate-600">·</span>
-            <span>Build: {meta?.build ?? "—"}</span>
-            <span className="text-slate-600">·</span>
-            <span>Updated</span>
+            <span>Build: {meta?.build ?? "--"}</span>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <a
@@ -772,7 +789,7 @@ export default function Home() {
         <div className="md:hidden border-t border-slate-800/40 px-4 py-2">
           <div className="relative w-full">
             <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
-              Search claim code / box / user…
+              Search claim code / box / userâ€¦
             </div>
 
             <button
@@ -798,12 +815,12 @@ export default function Home() {
       >
         <div className="space-y-3">
           <p>
-            You’re viewing the public Zero Phase testnet. Real users are actively exercising the protocol while we monitor network activity,
+            You're viewing the public Zero Phase testnet. Real users are actively exercising the protocol while we monitor network activity,
             tighten rules, and eliminate broken flows.
           </p>
 
           <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-            <div className="text-[12px] font-semibold text-slate-200">What’s real right now</div>
+            <div className="text-[12px] font-semibold text-slate-200">What's real right now</div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
               <li>Live network activity and telemetry on Scan.</li>
               <li>Protocol actions and claim execution paths.</li>
@@ -829,7 +846,7 @@ export default function Home() {
       >
         <div className="space-y-3">
           <p>
-            Funding the network means you provision USDT (BEP-20) into the protocol’s funding layer. In return, the protocol allocates custodied
+            Funding the network means you provision USDT (BEP-20) into the protocol's funding layer. In return, the protocol allocates custodied
             USDDD tied to network performance and the current Accrual Reference.
           </p>
 
@@ -874,10 +891,10 @@ export default function Home() {
       >
         <div className="space-y-3">
           <p className="text-slate-300">
-            Box Balances live in the Terminal. Use DIG → Treasure to browse sponsor boxes and inventories.
+            Box Balances live in the Terminal. Browse sponsor boxes and inventories in Terminal.
           </p>
           <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
-            Terminal command: <span className="font-mono text-slate-200">dig</span> → choose{" "}
+            Terminal command: <span className="font-mono text-slate-200">dig</span> - choose{" "}
             <span className="font-mono text-slate-200">Treasure (2)</span>
           </div>
         </div>
@@ -892,8 +909,8 @@ export default function Home() {
       >
         <div className="space-y-3">
           <p>
-            Golden Finds are the network’s limited daily wins — rare, time-based rewards that appear inside the DIG flow. When a Golden Find is hit,
-            it’s recorded publicly here on Scan.
+            Golden Finds are the network's limited daily wins - rare, time-based rewards that appear inside the DIG flow. When a Golden Find is hit,
+            it's recorded publicly here on Scan.
           </p>
 
           <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
@@ -915,21 +932,21 @@ export default function Home() {
           </div>
 
           <p className="text-slate-400">
-            Tip: Golden Finds are capped daily (see “Golden today” at the top). If you want to stay ahead of the wave, keep Scan open and join Telegram.
+            Tip: Golden Finds are capped daily (see 'Golden today' at the top). If you want to stay ahead of the wave, keep Scan open and join Telegram.
           </p>
         </div>
       </ScanModal>
 
       <ScanModal
         open={modal.open && modal.key === "search"}
-        title="Don’t search. DIG."
+        title="Don't search. DIG."
         onClose={closeModal}
         primaryLabel="Open Terminal"
         primaryHref={LINKS.terminal}
       >
         <div className="space-y-3">
           <p>
-            This is a live protocol surface — not a directory. The fastest way to understand USDDD is to interact with it:
+            This is a live protocol surface - not a directory. The fastest way to understand USDDD is to interact with it:
             DIG, sponsor boxes, or fund the network.
           </p>
 
@@ -952,7 +969,7 @@ export default function Home() {
           </div>
 
           <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
-            USDDD is by the people, for the people — transparency first. If you want to be early, join Telegram and help shape Genesis.
+            USDDD is by the people, for the people - transparency first. If you want to be early, join Telegram and help shape Genesis.
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
@@ -1078,9 +1095,10 @@ export default function Home() {
         </div>
 
         <footer className="mt-6 text-center text-[12px] text-slate-500">
-          USDDD · Zero Phase Public Testnet · Read-only · No wallets · No tracking
+          USDDD - Zero Phase Public Testnet - Read-only - No wallets - No tracking
         </footer>
       </div>
     </main>
   );
 }
+

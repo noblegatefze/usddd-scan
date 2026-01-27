@@ -2,7 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { getPublicFlags } from "../lib/flags";
+import { FundMaintenance } from "../_maintenance/FundMaintenance";
 
 type BuildMeta = { version: string; build: string; deployed_at: string };
 
@@ -75,13 +77,15 @@ const LOCAL_SESSION_KEY = "usddd_terminal_session_id_v1";
 const LOCAL_DISMISSED_KEY = "usddd_dismissed_positions_v1";
 
 function fmtPct2(n: number) {
-  return `${n.toFixed(2)}%`;
+  return `${(Number.isFinite(n) ? n : 0).toFixed(2)}%`;
 }
 function fmtNum(n: number) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(n);
+  const v = Number.isFinite(n) ? n : 0;
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(v);
 }
 function fmtDec(n: number, dp = 4) {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: dp }).format(n);
+  const v = Number.isFinite(n) ? n : 0;
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: dp }).format(v);
 }
 
 function msUntilNextUtcReset(now = new Date()): number {
@@ -101,7 +105,7 @@ function formatHMS(ms: number): string {
 }
 
 function GoldenPulsePills({ className = "" }: { className?: string }) {
-  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("—");
+  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("--:--:--");
 
   React.useEffect(() => {
     const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
@@ -176,7 +180,9 @@ function saveDismissedRefs(refs: string[]) {
   try {
     const uniq = Array.from(new Set(refs.map((r) => r.trim()).filter(Boolean)));
     localStorage.setItem(LOCAL_DISMISSED_KEY, JSON.stringify(uniq));
-  } catch { }
+  } catch {
+    // ignore
+  }
 }
 
 function readSavedRefs(): string[] {
@@ -194,7 +200,9 @@ function saveRefs(refs: string[]) {
   try {
     const uniq = Array.from(new Set(refs.map((r) => r.trim()).filter(Boolean)));
     localStorage.setItem(LOCAL_REFS_KEY, JSON.stringify(uniq));
-  } catch { }
+  } catch {
+    // ignore
+  }
 }
 
 function readSessionId(): string {
@@ -208,33 +216,16 @@ function saveSessionId(v: string) {
   try {
     if (!v.trim()) localStorage.removeItem(LOCAL_SESSION_KEY);
     else localStorage.setItem(LOCAL_SESSION_KEY, v.trim());
-  } catch { }
+  } catch {
+    // ignore
+  }
 }
 
 function statusToStage(status: string) {
   const s = String(status || "");
-
-  if (s === "awaiting_funds") {
-    return {
-      title: "Awaiting",
-      hint: "Send USDT (BEP-20) to your unique deposit address, then confirm with your tx hash.",
-    };
-  }
-
-  if (s === "funded_locked") {
-    return {
-      title: "Funded",
-      hint: "Deposit verified. Next: sweep to the treasury pipe (automatic).",
-    };
-  }
-
-  if (s === "swept_locked") {
-    return {
-      title: "Allocated",
-      hint: "USDDD is allocated and custodied. Accrual is active. Withdrawals unlock later.",
-    };
-  }
-
+  if (s === "awaiting_funds") return { title: "Awaiting", hint: "Send USDT (BEP-20) then confirm with tx hash." };
+  if (s === "funded_locked") return { title: "Funded", hint: "Deposit verified. Next: sweep (automatic)." };
+  if (s === "swept_locked") return { title: "Allocated", hint: "USDDD allocated. Accrual active. Withdraw locked." };
   return { title: s || "Unknown", hint: "Status reported by protocol." };
 }
 
@@ -247,60 +238,122 @@ function TxLink({ hash }: { hash: string }) {
       className="font-mono text-[11px] text-slate-200 hover:underline"
       title={hash}
     >
-      {hash.slice(0, 10)}…{hash.slice(-6)}
+      {hash.slice(0, 10)}...{hash.slice(-6)}
     </a>
   );
 }
 
 export default function FundNetworkPage() {
-  const [meta, setMeta] = React.useState<BuildMeta | null>(null);
-  const [activity, setActivity] = React.useState<ActivityResp | null>(null);
+  // ---- FLAGS GATE (do not early-return before hooks) ----
+  const [paused, setPaused] = useState(false);
+  const [flagsLoaded, setFlagsLoaded] = useState(false);
 
-  const [ack, setAck] = React.useState(false);
-  const [issuing, setIssuing] = React.useState(false);
-  const [issueErr, setIssueErr] = React.useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const flags = await getPublicFlags();
+        if (!alive) return;
+        setPaused(Boolean(flags?.pause_all));
+      } finally {
+        if (alive) setFlagsLoaded(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-  const [hideAwaiting, setHideAwaiting] = React.useState(true);
-  const [dismissedRefs, setDismissedRefs] = React.useState<string[]>([]);
-  const [dismissModal, setDismissModal] = React.useState<{ open: boolean; ref: string }>({ open: false, ref: "" });
-  const [helpModalOpen, setHelpModalOpen] = React.useState(false);
+  // ---- app state ----
+  const [meta, setMeta] = useState<BuildMeta | null>(null);
+  const [activity, setActivity] = useState<ActivityResp | null>(null);
 
-  // local receipts (immediate UX)
-  const [positions, setPositions] = React.useState<IssuedPosition[]>([]);
-  // db truth
-  const [dbPositions, setDbPositions] = React.useState<DbPosition[]>([]);
-  const [loadingDb, setLoadingDb] = React.useState(false);
+  const [ack, setAck] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [issueErr, setIssueErr] = useState<string | null>(null);
 
-  const [fundSummary, setFundSummary] = React.useState<{
+  const [hideAwaiting, setHideAwaiting] = useState(true);
+  const [dismissedRefs, setDismissedRefs] = useState<string[]>([]);
+  const [dismissModal, setDismissModal] = useState<{ open: boolean; ref: string }>({ open: false, ref: "" });
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
+
+  const [positions, setPositions] = useState<IssuedPosition[]>([]);
+  const [dbPositions, setDbPositions] = useState<DbPosition[]>([]);
+  const [loadingDb, setLoadingDb] = useState(false);
+
+  const [fundSummary, setFundSummary] = useState<{
     pending_positions: number;
     active_positions: number;
     total_funded_usdt: number;
   } | null>(null);
 
-  // Terminal session binding
-  const [sessionId, setSessionId] = React.useState<string>("");
-  const [bindErr, setBindErr] = React.useState<string | null>(null);
-  const [binding, setBinding] = React.useState(false);
-  const [bound, setBound] = React.useState(false);
+  const [sessionId, setSessionId] = useState<string>("");
+  const sessionIdRef = useRef<string>("");
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
-  // Confirm deposit
-  const [confirming, setConfirming] = React.useState<Record<string, boolean>>({});
-  const [txInputs, setTxInputs] = React.useState<Record<string, string>>({});
-  const [confirmErr, setConfirmErr] = React.useState<Record<string, string>>({});
+  const [bindErr, setBindErr] = useState<string | null>(null);
+  const [binding, setBinding] = useState(false);
+  const [bound, setBound] = useState(false);
 
-  // Confirm modal (UX)
-  const [confirmModal, setConfirmModal] = React.useState<{
+  const [confirming, setConfirming] = useState<Record<string, boolean>>({});
+  const [txInputs, setTxInputs] = useState<Record<string, string>>({});
+  const [confirmErr, setConfirmErr] = useState<Record<string, string>>({});
+
+  const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     ref: string;
     tx: string;
-    stage: "idle" | "verifying" | "sweeping" | "success" | "error";
+    stage: "idle" | "verifying" | "success" | "error";
     message?: string;
     tries: number;
     major: boolean;
   }>({ open: false, ref: "", tx: "", stage: "idle", tries: 0, major: false });
 
+  // ---- derived model ----
+  const model = activity?.model ?? {};
+  const floorPct = typeof model.accrual_floor_pct === "number" ? model.accrual_floor_pct : 10;
+  const capPct = typeof model.accrual_cap_pct === "number" ? model.accrual_cap_pct : 25;
+  const appliedAccrualPctRaw = typeof model.applied_accrual_pct === "number" ? model.applied_accrual_pct : null;
+
+  // UI-only: avoid perfectly round values
+  const appliedAccrualPct =
+    typeof appliedAccrualPctRaw === "number"
+      ? Math.abs(appliedAccrualPctRaw - floorPct) < 1e-9
+        ? floorPct - 0.03
+        : Math.abs(appliedAccrualPctRaw - capPct) < 1e-9
+        ? capPct - 0.04
+        : appliedAccrualPctRaw
+      : null;
+
+  const rewardEff = typeof model.reward_efficiency_usd_per_usddd === "number" ? model.reward_efficiency_usd_per_usddd : null;
+
+  // accrual clock
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  function computeAccruedTotalUsddd(p: DbPosition): number | null {
+    const principal = Number(p?.usddd_allocated ?? 0);
+    if (!Number.isFinite(principal) || principal <= 0) return null;
+
+    const startMs = p?.swept_at ? Date.parse(String(p.swept_at)) : NaN;
+    if (!Number.isFinite(startMs)) return principal;
+    if (typeof appliedAccrualPct !== "number") return principal;
+
+    const elapsedSec = Math.max(0, (nowMs - startMs) / 1000);
+    const yearSec = 365 * 24 * 60 * 60;
+    const yieldAmt = principal * (appliedAccrualPct / 100) * (elapsedSec / yearSec);
+    const total = principal + yieldAmt;
+    return Number.isFinite(total) ? total : principal;
+  }
+
+  // ---- helpers ----
   async function hydrateDbByRefsOrSession() {
-    const sid = sessionId.trim();
+    const sid = sessionIdRef.current.trim();
     const refs = readSavedRefs();
 
     setLoadingDb(true);
@@ -312,12 +365,13 @@ export default function FundNetworkPage() {
         body: JSON.stringify(body),
         cache: "no-store",
       });
-      const j: any = await r.json();
+
+      const j: any = await r.json().catch(() => null);
       if (j?.ok && Array.isArray(j.positions)) {
         const arr = (j.positions as DbPosition[]).slice().sort((a, b) => {
           const ta = Date.parse(String(a.created_at || ""));
           const tb = Date.parse(String(b.created_at || ""));
-          return (isFinite(tb) ? tb : 0) - (isFinite(ta) ? ta : 0);
+          return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
         });
         setDbPositions(arr);
         setBound(Boolean(sid) && j.mode === "terminal_user");
@@ -329,21 +383,43 @@ export default function FundNetworkPage() {
     }
   }
 
-  // initial load: session id + db hydrate
-  React.useEffect(() => {
+  function isMajorConfirmError(msg: string) {
+    const m = String(msg || "").toLowerCase();
+    return (
+      m.includes("amount out of bounds") ||
+      m.includes("no matching usdt transfer") ||
+      m.includes("send only usdt") ||
+      m.includes("wrong token") ||
+      m.includes("wrong chain")
+    );
+  }
+
+  function mailtoRecovery(ref: string, tx: string) {
+    const to = "hq@noblegate.ae";
+    const subject = encodeURIComponent(`USDDD Fund Recovery Request - ${ref}`);
+    const body = encodeURIComponent(
+      `Hello HQ,\n\nI need help recovering a deposit sent to a USDDD Fund Network address.\n\nRef: ${ref}\nTx hash: ${tx}\nSession id (if available): ${sessionIdRef.current.trim()}\n\nNotes:\n- I may have used the wrong token/chain or made an incorrect transfer.\n- Please advise the recovery process.\n\nThank you.`
+    );
+    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
+  }
+
+  // ---- effects (guarded when paused) ----
+  useEffect(() => {
+    if (!flagsLoaded || paused) return;
     setSessionId(readSessionId());
     setDismissedRefs(readDismissedRefs());
     void hydrateDbByRefsOrSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [flagsLoaded, paused]);
 
-  // Poll fund summary
-  React.useEffect(() => {
+  useEffect(() => {
+    if (!flagsLoaded || paused) return;
     let cancelled = false;
+
     const tick = async () => {
       try {
         const r = await fetch("/api/fund/summary", { cache: "no-store" });
-        const j: any = await r.json();
+        const j: any = await r.json().catch(() => null);
         if (!cancelled && j?.ok) {
           setFundSummary({
             pending_positions: Number(j.pending_positions ?? 0),
@@ -351,23 +427,28 @@ export default function FundNetworkPage() {
             total_funded_usdt: Number(j.total_funded_usdt ?? 0),
           });
         }
-      } catch { }
+      } catch {
+        // ignore
+      }
     };
+
     tick();
     const t = setInterval(tick, 10000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
-  }, []);
+  }, [flagsLoaded, paused]);
 
-  // Auto-refresh DB positions (seamless)
-  React.useEffect(() => {
+  useEffect(() => {
+    if (!flagsLoaded || paused) return;
     let cancelled = false;
+
     const tick = async () => {
       if (cancelled) return;
       await hydrateDbByRefsOrSession();
     };
+
     tick();
     const t = setInterval(tick, 10000);
     return () => {
@@ -375,82 +456,43 @@ export default function FundNetworkPage() {
       clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [flagsLoaded, paused, sessionId]);
 
-  // meta + activity
-  React.useEffect(() => {
+  useEffect(() => {
+    if (!flagsLoaded || paused) return;
     let cancelled = false;
 
     (async () => {
       try {
         const r = await fetch("/api/meta/build", { cache: "no-store" });
-        const j: any = await r.json();
+        const j: any = await r.json().catch(() => null);
         const m = coerceMeta(j);
         if (!cancelled && m) setMeta(m);
-      } catch { }
+      } catch {
+        // ignore
+      }
     })();
 
     (async () => {
       try {
         const r = await fetch("/api/activity/24h", { cache: "no-store" });
-        const j: any = await r.json();
+        const j: any = await r.json().catch(() => null);
         const a = coerceActivity(j);
         if (!cancelled && a) setActivity(a);
-      } catch { }
+      } catch {
+        // ignore
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [flagsLoaded, paused]);
 
-  const model = activity?.model ?? {};
-  const floorPct = typeof model.accrual_floor_pct === "number" ? model.accrual_floor_pct : 10;
-  const capPct = typeof model.accrual_cap_pct === "number" ? model.accrual_cap_pct : 25;
+  // ---- lists ----
+  const dismissedSet = useMemo(() => new Set(dismissedRefs), [dismissedRefs]);
 
-  const appliedAccrualPctRaw = typeof model.applied_accrual_pct === "number" ? model.applied_accrual_pct : null;
-
-  // UI-only: avoid perfectly round-looking caps/floors in display (feels hardcoded).
-  const appliedAccrualPct =
-    typeof appliedAccrualPctRaw === "number"
-      ? Math.abs(appliedAccrualPctRaw - floorPct) < 1e-9
-        ? floorPct - 0.03
-        : Math.abs(appliedAccrualPctRaw - capPct) < 1e-9
-          ? capPct - 0.04
-          : appliedAccrualPctRaw
-      : null;
-
-  const rewardEff = typeof model.reward_efficiency_usd_per_usddd === "number" ? model.reward_efficiency_usd_per_usddd : null;
-
-  const [nowMs, setNowMs] = React.useState<number>(() => Date.now());
-
-  React.useEffect(() => {
-    const t = setInterval(() => setNowMs(Date.now()), 5000);
-    return () => clearInterval(t);
-  }, []);
-
-  function computeAccruedTotalUsddd(p: any): number | null {
-    const principal = Number(p?.usddd_allocated ?? 0);
-    if (!Number.isFinite(principal) || principal <= 0) return null;
-
-    const startMs = p?.swept_at ? Date.parse(String(p.swept_at)) : NaN;
-
-    if (!Number.isFinite(startMs)) return principal;
-    if (typeof appliedAccrualPct !== "number") return principal;
-
-    const elapsedSec = Math.max(0, (nowMs - startMs) / 1000);
-    const yearSec = 365 * 24 * 60 * 60;
-
-    const yieldAmt =
-      principal * (appliedAccrualPct / 100) * (elapsedSec / yearSec);
-
-    const total = principal + yieldAmt;
-    return Number.isFinite(total) ? total : principal;
-  }
-
-  const dismissedSet = React.useMemo(() => new Set(dismissedRefs), [dismissedRefs]);
-
-  const visibleDbPositions = React.useMemo(() => {
+  const visibleDbPositions = useMemo(() => {
     return dbPositions.filter((p) => {
       if (dismissedSet.has(p.position_ref)) return false;
       if (hideAwaiting && String(p.status) === "awaiting_funds") return false;
@@ -458,32 +500,39 @@ export default function FundNetworkPage() {
     });
   }, [dbPositions, dismissedSet, hideAwaiting]);
 
-  const yourTotalUsdt = visibleDbPositions.reduce((acc, p) => {
-    const v = Number(p.funded_usdt ?? 0);
-    return Number.isFinite(v) ? acc + v : acc;
-  }, 0);
+  const yourTotalUsdt = useMemo(() => {
+    return visibleDbPositions.reduce((acc, p) => {
+      const v = Number(p.funded_usdt ?? 0);
+      return Number.isFinite(v) ? acc + v : acc;
+    }, 0);
+  }, [visibleDbPositions]);
 
-  const yourTotalAllocated = visibleDbPositions.reduce((acc, p) => {
-    const v = Number(p.usddd_allocated ?? 0);
-    return Number.isFinite(v) ? acc + v : acc;
-  }, 0);
+  const yourTotalAllocated = useMemo(() => {
+    return visibleDbPositions.reduce((acc, p) => {
+      const v = Number(p.usddd_allocated ?? 0);
+      return Number.isFinite(v) ? acc + v : acc;
+    }, 0);
+  }, [visibleDbPositions]);
 
+  // ---- actions ----
   async function issueNewPosition() {
     if (!ack) return;
     setIssueErr(null);
     setIssuing(true);
     try {
       const r = await fetch("/api/fund/issue-address", { method: "POST" });
-      const j: any = await r.json();
+      const j: any = await r.json().catch(() => null);
       if (!r.ok || !j?.ok) {
         setIssueErr(j?.error ?? "Failed to generate deposit address");
         return;
       }
+
       const p = j.position as IssuedPosition;
       setPositions((prev) => [p, ...prev]);
 
       const refs = Array.from(new Set([...readSavedRefs(), p.ref]));
       saveRefs(refs);
+
       void hydrateDbByRefsOrSession();
 
       setTimeout(() => {
@@ -500,10 +549,12 @@ export default function FundNetworkPage() {
   async function bindToTerminal() {
     const sid = sessionId.trim();
     setBindErr(null);
+
     if (!sid) {
-      setBindErr("Enter your Terminal session_id (from your Terminal browser cookie / session).");
+      setBindErr("Enter your Terminal session_id.");
       return;
     }
+
     setBinding(true);
     try {
       const refs = readSavedRefs();
@@ -518,11 +569,13 @@ export default function FundNetworkPage() {
         body: JSON.stringify({ session_id: sid, refs }),
         cache: "no-store",
       });
-      const j: any = await r.json();
+
+      const j: any = await r.json().catch(() => null);
       if (!j?.ok) {
         setBindErr(j?.error ?? "Bind failed");
         return;
       }
+
       saveSessionId(sid);
       setBound(true);
       await hydrateDbByRefsOrSession();
@@ -533,26 +586,6 @@ export default function FundNetworkPage() {
     }
   }
 
-  function isMajorConfirmError(msg: string) {
-    const m = msg.toLowerCase();
-    return (
-      m.includes("amount out of bounds") ||
-      m.includes("no matching usdt transfer") ||
-      m.includes("send only usdt") ||
-      m.includes("wrong token") ||
-      m.includes("wrong chain")
-    );
-  }
-
-  function mailtoRecovery(ref: string, tx: string) {
-    const to = "hq@noblegate.ae";
-    const subject = encodeURIComponent(`USDDD Fund Recovery Request — ${ref}`);
-    const body = encodeURIComponent(
-      `Hello HQ,\n\nI need help recovering a deposit sent to a USDDD Fund Network address.\n\nRef: ${ref}\nTx hash: ${tx}\nSession id (if available): ${sessionId.trim()}\n\nNotes:\n- I may have used the wrong token/chain or made an incorrect transfer.\n- Please advise the recovery process.\n\nThank you.`
-    );
-    window.location.href = `mailto:${to}?subject=${subject}&body=${body}`;
-  }
-
   async function confirmDeposit(ref: string) {
     const tx = (txInputs[ref] ?? "").trim();
     if (!tx) {
@@ -560,88 +593,62 @@ export default function FundNetworkPage() {
       return;
     }
 
-    // open modal
+    setConfirmErr((prev) => ({ ...prev, [ref]: "" }));
+    setConfirming((prev) => ({ ...prev, [ref]: true }));
+
     setConfirmModal((prev) => ({
       open: true,
       ref,
       tx,
       stage: "verifying",
-      message: "Verifying deposit…",
+      message: "Verifying deposit...",
       tries: (prev.ref === ref ? prev.tries : 0) + 1,
       major: false,
     }));
-
-    setConfirmErr((prev) => ({ ...prev, [ref]: "" }));
-    setConfirming((prev) => ({ ...prev, [ref]: true }));
 
     try {
       const r = await fetch("/api/fund/confirm", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ref, tx_hash: tx, session_id: sessionId.trim() || null }),
+        body: JSON.stringify({ ref, tx_hash: tx, session_id: sessionIdRef.current.trim() || null }),
         cache: "no-store",
       });
 
-      const j: any = await r.json().catch(() => ({}));
-
+      const j: any = await r.json().catch(() => null);
       if (!j?.ok) {
         const msg = String(j?.error ?? "Confirm failed");
         const major = isMajorConfirmError(msg);
-
         setConfirmErr((prev) => ({ ...prev, [ref]: msg }));
-
         setConfirmModal((prev) => ({
           ...prev,
           open: true,
           stage: "error",
           message: msg,
-          major: major || prev.tries >= 2, // escalate after 2 tries
+          major: major || prev.tries >= 2,
         }));
-
         return;
       }
 
-      // If confirm ok but sweep failed, show it as "sweeping" then error
-      if (j?.sweep && j.sweep.ok === false) {
-        const msg = String(j?.sweep?.error ?? "Sweep failed (try again shortly)");
-        setConfirmModal((prev) => ({
-          ...prev,
-          stage: "error",
-          message: `Deposit confirmed, but sweep is pending: ${msg}`,
-          major: false,
-        }));
-        // still refresh DB so user sees funded_locked row if it exists
-        await hydrateDbByRefsOrSession();
-        return;
-      }
-
-      // Success
+      // success
       setConfirmModal((prev) => ({
         ...prev,
+        open: true,
         stage: "success",
-        message: "Position added ✅",
+        message: "Position added OK",
         major: false,
       }));
 
       await hydrateDbByRefsOrSession();
 
-      // UX: clear receipt after success + show row
       setPositions((prev) => prev.filter((p) => p.ref !== ref));
       setTxInputs((prev) => ({ ...prev, [ref]: "" }));
 
-      setTimeout(() => {
-        const el = document.getElementById("positions");
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 80);
-
-      // Hold modal for 900ms then close
       setTimeout(() => {
         setConfirmModal((prev) => ({ ...prev, open: false, stage: "idle", message: undefined }));
       }, 900);
     } catch (e: any) {
       const msg = String(e?.message ?? "Confirm failed");
       const major = isMajorConfirmError(msg);
-
       setConfirmErr((prev) => ({ ...prev, [ref]: msg }));
       setConfirmModal((prev) => ({
         ...prev,
@@ -655,15 +662,22 @@ export default function FundNetworkPage() {
     }
   }
 
-  return (
+  // ---- RENDER GATE ----
+  if (!flagsLoaded) {
+    return (
+      <main className="min-h-screen bg-[#0b0f14] text-slate-200 flex items-center justify-center">
+        <div className="text-[13px] text-slate-400">Loading...</div>
+      </main>
+    );
+  }
+
+  return paused ? (
+    <FundMaintenance />
+  ) : (
     <main className="min-h-screen w-full overflow-x-hidden bg-[#0b0f14] text-slate-200">
       <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-[#0b0f14]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <a
-            href="https://usddd.digdug.do"
-            className="flex items-center gap-2 hover:opacity-90"
-            title="Back to USDDD Scan"
-          >
+          <a href="https://usddd.digdug.do" className="flex items-center gap-2 hover:opacity-90" title="Back to USDDD Scan">
             <div className="relative h-7 w-7 overflow-hidden rounded-full border border-slate-800 bg-slate-950/40">
               <Image src="/logo.png" alt="USDDD" fill sizes="28px" className="object-cover" />
             </div>
@@ -689,12 +703,8 @@ export default function FundNetworkPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
-              Zero / Pre-Genesis
-            </span>
-            <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300">
-              LIVE
-            </span>
+            <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">Zero / Pre-Genesis</span>
+            <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300">LIVE</span>
           </div>
         </div>
 
@@ -702,39 +712,21 @@ export default function FundNetworkPage() {
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[12px] text-slate-400">
             <span>Phase: Zero</span>
             <span className="text-slate-600">·</span>
-            <span>Version: {meta?.version ?? "—"}</span>
+            <span>Version: {meta?.version ?? "--"}</span>
             <span className="text-slate-600">·</span>
-            <span>Build: {meta?.build ?? "—"}</span>
+            <span>Build: {meta?.build ?? "--"}</span>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Link
-                href={LINKS.home}
-                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-              >
+              <Link href={LINKS.home} className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
                 Back to Scan
               </Link>
-              <a
-                href={LINKS.terminal}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-              >
+              <a href={LINKS.terminal} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
                 Open Terminal
               </a>
-              <a
-                href={LINKS.telegram}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-              >
+              <a href={LINKS.telegram} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
                 Telegram
               </a>
-              <a
-                href={LINKS.docs}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-              >
+              <a href={LINKS.docs} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
                 Docs
               </a>
             </div>
@@ -745,13 +737,7 @@ export default function FundNetworkPage() {
           <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
             <div className="relative">
               <span>Fund Network - private funding console...</span>
-              <button
-                type="button"
-                onClick={() => setHelpModalOpen(true)}
-                className="absolute inset-0"
-                aria-label="Open help"
-                title="How Fund Network works"
-              />
+              <button type="button" onClick={() => setHelpModalOpen(true)} className="absolute inset-0" aria-label="Open help" title="How Fund Network works" />
             </div>
           </div>
           <div className="mt-2 flex justify-between">
@@ -760,30 +746,25 @@ export default function FundNetworkPage() {
         </div>
       </header>
 
+      {/* Confirm modal */}
       {confirmModal.open ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
           <div className="relative w-[92%] max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
-            <div className="flex items-start gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-slate-100">Confirm deposit</div>
                 <div className="mt-1 text-[12px] text-slate-400">
                   Ref: <span className="font-mono text-slate-200">{confirmModal.ref}</span>
                 </div>
                 <div className="mt-1 text-[12px] text-slate-400">
-                  Tx:{" "}
-                  <span className="font-mono text-slate-200">
-                    {confirmModal.tx.slice(0, 10)}…{confirmModal.tx.slice(-6)}
-                  </span>
+                  Tx: <span className="font-mono text-slate-200">{confirmModal.tx.slice(0, 10)}...{confirmModal.tx.slice(-6)}</span>
                 </div>
               </div>
-
               <button
                 type="button"
-                onClick={() => setConfirmModal((p) => ({ ...p, open: false }))}
+                onClick={() => setConfirmModal((p) => ({ ...p, open: false, stage: "idle" }))}
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-                title="Close"
               >
                 Close
               </button>
@@ -791,30 +772,15 @@ export default function FundNetworkPage() {
 
             <div className="mt-4 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
               <div className="text-[12px] text-slate-400">Status</div>
-              <div className="mt-1 text-[13px] text-slate-200">
-                {confirmModal.message ?? (confirmModal.stage === "verifying" ? "Verifying deposit…" : "Working…")}
-              </div>
-
-              {confirmModal.stage === "verifying" || confirmModal.stage === "sweeping" ? (
-                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full border border-slate-800 bg-slate-950/50">
-                  <div className="h-full w-1/2 animate-pulse rounded-full bg-slate-200/30" />
-                </div>
-              ) : null}
+              <div className="mt-1 text-[13px] text-slate-200">{confirmModal.message ?? "--"}</div>
 
               {confirmModal.stage === "error" ? (
                 <div className="mt-3 space-y-2">
-                  <div className="text-[11px] text-slate-500">
-                    If you entered the wrong tx hash, close this window, correct it, and confirm again.
-                  </div>
-
+                  <div className="text-[11px] text-slate-500">If you entered the wrong tx hash, close, correct it, and confirm again.</div>
                   {confirmModal.major ? (
                     <div className="rounded-md border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
                       <div className="font-semibold text-amber-200/90">Recovery may be required</div>
-                      <div className="mt-1 text-[11px] text-amber-200/90">
-                        This can happen if the wrong token/chain was used, or the amount was outside the allowed range.
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => mailtoRecovery(confirmModal.ref, confirmModal.tx)}
@@ -822,108 +788,65 @@ export default function FundNetworkPage() {
                         >
                           Request recovery (email HQ)
                         </button>
-
                         <button
                           type="button"
-                          onClick={() => setConfirmModal((p) => ({ ...p, open: false }))}
+                          onClick={() => setConfirmModal((p) => ({ ...p, open: false, stage: "idle" }))}
                           className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
                         >
                           Edit tx hash
                         </button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setConfirmModal((p) => ({ ...p, open: false }))}
-                        className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
-                      >
-                        Edit tx hash
-                      </button>
-                    </div>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
             </div>
-
-            {confirmModal.stage === "success" ? (
-              <div className="mt-3 text-[11px] text-slate-500">Returning to your positions…</div>
-            ) : null}
           </div>
         </div>
       ) : null}
 
+      {/* Help modal */}
       {helpModalOpen ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setHelpModalOpen(false)}
-            aria-label="Close"
-          />
-
+          <button type="button" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setHelpModalOpen(false)} aria-label="Close" />
           <div className="relative w-[92%] max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div className="text-sm font-semibold text-slate-100">How Fund Network works</div>
-
               <button
                 type="button"
                 onClick={() => setHelpModalOpen(false)}
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
                 aria-label="Close"
               >
-                ✕
+                x
               </button>
             </div>
 
             <div className="mt-3 space-y-3 text-[12px] leading-relaxed text-slate-300">
               <p>
-                Fund Network lets you provision USDT (BEP-20) into the protocol’s funding layer. Each position issues a unique deposit address.
-                Once funded and verified, the protocol mints and allocates custodied USDDD to your position.
+                Fund Network provisions USDT (BEP-20) into the protocol funding layer. Each position issues a unique deposit address.
+                After you confirm by tx hash, the protocol verifies and allocates custodied USDDD to the position.
               </p>
-
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] font-semibold text-slate-200">Flow</div>
                 <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12px] text-slate-300">
-                  <li>Tick Understanding.</li>
-                  <li>Generate a unique deposit address.</li>
-                  <li>Send USDT (BEP-20) to that address.</li>
-                  <li>Protocol verifies and sweeps funds.</li>
-                  <li>USDDD is minted/allocated to your custodied position.</li>
-                  <li>Accrual begins and is reflected in your Total (Allocated + Accrued).</li>
+                  <li>Tick Understanding</li>
+                  <li>Generate a deposit address</li>
+                  <li>Send USDT (BEP-20)</li>
+                  <li>Confirm with tx hash</li>
+                  <li>Protocol allocates custodied USDDD</li>
                 </ol>
-              </div>
-
-              <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-emerald-200">
-                Custody during Zero Phase keeps the system stable while we harden flows. Withdrawals remain locked until admin unlock / Genesis rules.
               </div>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setHelpModalOpen(false)}
-                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
-              >
+              <button type="button" onClick={() => setHelpModalOpen(false)} className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70">
                 Close
               </button>
-
-              <a
-                href="https://digdug.do"
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
-              >
+              <a href={LINKS.terminal} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70">
                 Open Terminal
               </a>
-
-              <a
-                href="https://t.me/digdugdo"
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
-              >
+              <a href={LINKS.telegram} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70">
                 Join Telegram
               </a>
             </div>
@@ -931,6 +854,7 @@ export default function FundNetworkPage() {
         </div>
       ) : null}
 
+      {/* Dismiss modal */}
       {dismissModal.open ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -938,13 +862,6 @@ export default function FundNetworkPage() {
             <div className="text-sm font-semibold text-slate-100">Dismiss this position?</div>
             <div className="mt-2 text-[12px] text-slate-400">
               Ref: <span className="font-mono text-slate-200">{dismissModal.ref}</span>
-            </div>
-
-            <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 p-3 text-[12px] text-slate-400">
-              This will hide the position from this device.
-              <div className="mt-2 text-[11px] text-slate-500">
-                If you already sent funds to this address, do not dismiss — use Request recovery instead.
-              </div>
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
@@ -978,37 +895,31 @@ export default function FundNetworkPage() {
 
       <div className="mx-auto max-w-6xl px-4 pt-6 pb-24">
         <div className="grid min-w-0 gap-4 md:grid-cols-12">
+          {/* LEFT */}
           <section className="md:col-span-7 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-3">
               <h1 className="text-base font-semibold text-slate-100">Fund Network</h1>
               <div className="mt-1 text-[12px] text-slate-400 break-words">
-                Create a dedicated deposit address, fund the network with USDT (BEP-20), and receive a custodied USDDD
-                allocation tied to the protocol.
+                Create a dedicated deposit address, fund with USDT (BEP-20), and receive custodied USDDD allocation tied to the protocol.
               </div>
             </div>
 
             <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
               <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={ack}
-                  onChange={(e) => setAck(e.target.checked)}
-                  className="mt-1 h-4 w-4 accent-slate-200"
-                />
+                <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1 h-4 w-4 accent-slate-200" />
                 <div className="flex-1">
                   <div className="text-[12px] font-semibold text-slate-200">Understanding</div>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-400 break-words">
-                    <li>Each funding position uses a unique deposit address. Do not reuse old addresses.</li>
+                    <li>Each position uses a unique deposit address. Do not reuse old addresses.</li>
                     <li>Send only USDT on BNB Chain (BEP-20). Other tokens/chains may be unrecoverable.</li>
-                    <li>For safety, deposits are confirmed by your tx hash (receipt-verified). Do not rely on automated scanning.</li>
+                    <li>For safety, deposits are confirmed by tx hash (receipt-verified).</li>
                     <li>Withdrawals remain locked until admin unlock.</li>
                   </ul>
 
                   <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 px-3 py-2 text-[12px] text-slate-300">
                     <div className="font-semibold text-slate-200">Link to Terminal (recommended)</div>
                     <div className="mt-1 text-slate-400">
-                      To permanently access positions across devices, link this page to your DIGDUG Terminal session (no
-                      password required here).
+                      To access positions across devices, link this page to your DIGDUG Terminal session (no password required here).
                     </div>
 
                     <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1040,15 +951,11 @@ export default function FundNetworkPage() {
                       </a>
                     </div>
 
-                    {bindErr && <div className="mt-2 text-[12px] text-amber-200">{bindErr}</div>}
-                    <div className="mt-2 text-[11px] text-slate-500">
-                      Tip: open Terminal in a separate tab, log in, then copy your current session_id.
-                    </div>
+                    {bindErr ? <div className="mt-2 text-[12px] text-amber-200">{bindErr}</div> : null}
+                    <div className="mt-2 text-[11px] text-slate-500">Tip: open Terminal in a separate tab, log in, then copy your session_id.</div>
                   </div>
 
-                  <div className="mt-3 text-[12px] text-slate-500">
-                    By continuing, you confirm you understand the protocol terms above.
-                  </div>
+                  <div className="mt-3 text-[12px] text-slate-500">By continuing, you confirm you understand the protocol terms above.</div>
                 </div>
               </div>
             </div>
@@ -1082,12 +989,12 @@ export default function FundNetworkPage() {
               )}
             </div>
 
-            {issueErr && (
+            {issueErr ? (
               <div className="mt-3 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
                 <div className="font-semibold text-amber-200/90">Could not generate address</div>
                 <div className="mt-1">{issueErr}</div>
               </div>
-            )}
+            ) : null}
 
             <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 px-3 py-2 text-[12px] text-slate-400">
               <div className="font-semibold text-slate-200">Safety notes</div>
@@ -1098,6 +1005,7 @@ export default function FundNetworkPage() {
               </ul>
             </div>
 
+            {/* Receipts */}
             <div id="receipts" className="mt-4">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-200">Receipts (this browser session)</h2>
@@ -1105,9 +1013,7 @@ export default function FundNetworkPage() {
               </div>
 
               {positions.length === 0 ? (
-                <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px] text-slate-400">
-                  No positions generated yet.
-                </div>
+                <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px] text-slate-400">No positions generated yet.</div>
               ) : (
                 <div className="space-y-3">
                   {positions.map((p) => (
@@ -1120,12 +1026,13 @@ export default function FundNetworkPage() {
                         </div>
                         <div className="text-[11px] text-slate-500">{new Date(p.created_at).toLocaleString()}</div>
                       </div>
+
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setPositions((prev) => prev.filter((x) => x.ref !== p.ref))}
                           className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-950/70"
-                          title="Removes this receipt from the screen (position ref remains saved)."
+                          title="Removes this receipt from the screen (ref remains saved)"
                         >
                           Dismiss
                         </button>
@@ -1146,8 +1053,8 @@ export default function FundNetworkPage() {
                         Max: <span className="text-slate-200">{fmtNum(p.max_usdt)} USDT</span>
                       </div>
 
-                      <div className="mt-2 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-red-300">
-                        ⚠️ <strong>Important:</strong> Deposits must be sent in <strong>one single transfer</strong> between{" "}
+                      <div className="mt-3 rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-[12px] leading-relaxed text-red-300">
+                        <strong>Important:</strong> Deposits must be sent in <strong>one single transfer</strong> between{" "}
                         <strong>100 and 250,000 USDT</strong>. Multiple smaller transfers are not aggregated.
                       </div>
 
@@ -1176,9 +1083,7 @@ export default function FundNetworkPage() {
                         <div className="mt-2 text-[12px] text-slate-400">
                           Deposit tx: <TxLink hash={p.deposit_tx_hash} />
                         </div>
-                      ) : (
-                        <div className="mt-2 text-[12px] text-slate-500">Next: confirm your deposit by tx hash → locked.</div>
-                      )}
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -1186,6 +1091,7 @@ export default function FundNetworkPage() {
             </div>
           </section>
 
+          {/* RIGHT */}
           <section className="md:col-span-5 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -1200,16 +1106,13 @@ export default function FundNetworkPage() {
             <div className="grid gap-3">
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] text-slate-400">Applied Accrual (current reference)</div>
-                <div className="mt-1 text-xl font-semibold text-slate-100">
-                  {appliedAccrualPct == null ? "—" : fmtPct2(appliedAccrualPct)}
-                </div>
-                <div className="mt-1 text-[12px] text-slate-500">
-                  Clamped by protocol bounds. Driven by Reward Efficiency.
-                </div>
+                <div className="mt-1 text-xl font-semibold text-slate-100">{appliedAccrualPct == null ? "--" : fmtPct2(appliedAccrualPct)}</div>
+                <div className="mt-1 text-[12px] text-slate-500">Clamped by protocol bounds. Driven by Reward Efficiency.</div>
               </div>
+
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] text-slate-400">Reward Efficiency (driver)</div>
-                <div className="mt-1 text-[12px] text-slate-200">{rewardEff == null ? "—" : `${fmtDec(rewardEff, 4)} $/USDDD`}</div>
+                <div className="mt-1 text-[12px] text-slate-200">{rewardEff == null ? "--" : `${fmtDec(rewardEff, 4)} $/USDDD`}</div>
               </div>
 
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
@@ -1217,7 +1120,7 @@ export default function FundNetworkPage() {
                 <div className="mt-1 text-[12px] text-slate-500">
                   Token:{" "}
                   <a href={`${BSC_SCAN_BASE}/token/${USDDD_TOKEN_BEP20}`} target="_blank" rel="noreferrer" className="text-slate-200 hover:underline">
-                    {USDDD_TOKEN_BEP20.slice(0, 10)}…{USDDD_TOKEN_BEP20.slice(-6)}
+                    {USDDD_TOKEN_BEP20.slice(0, 10)}...{USDDD_TOKEN_BEP20.slice(-6)}
                   </a>
                 </div>
               </div>
@@ -1243,13 +1146,7 @@ export default function FundNetworkPage() {
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="flex items-center justify-between">
                   <div className="text-[12px] text-slate-400">Protocol Backing (Global)</div>
-                  <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-0.5 text-[10px] text-slate-400">
-                    Protocol-wide
-                  </span>
-                </div>
-
-                <div className="mt-1 text-[11px] text-slate-500">
-                  These totals are protocol-wide (not your personal balance). Your totals are shown above.
+                  <span className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-0.5 text-[10px] text-slate-400">Protocol-wide</span>
                 </div>
 
                 <div className="mt-2 text-[12px] text-slate-500">
@@ -1269,34 +1166,31 @@ export default function FundNetworkPage() {
                       </div>
                     </div>
                   ) : (
-                    <span>Loading…</span>
+                    <span>Loading...</span>
                   )}
                 </div>
               </div>
             </div>
           </section>
 
+          {/* DB positions table */}
           <section id="positions" className="md:col-span-12 min-w-0 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-slate-200">
-                {bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}
-              </h2>
+              <h2 className="text-sm font-semibold text-slate-200">{bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}</h2>
 
               <div className="ml-auto flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setHideAwaiting((v) => !v)}
                   className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-                  title="Hide or show unfunded (Awaiting) positions"
                 >
                   {hideAwaiting ? "Hide Awaiting: ON" : "Hide Awaiting: OFF"}
                 </button>
 
-                <div className="text-[11px] text-slate-500">{loadingDb ? "Refreshing…" : "Withdraw shown but locked"}</div>
+                <div className="text-[11px] text-slate-500">{loadingDb ? "Refreshing..." : "Withdraw shown but locked"}</div>
               </div>
             </div>
 
-            {/* Etherscan-style: full-bleed horizontal scroller on mobile, normal on desktop */}
             <div className="-mx-4 md:mx-0 min-w-0 overflow-x-auto overscroll-x-contain px-4 md:px-0">
               <table className="min-w-[860px] w-full text-[12px]">
                 <thead className="text-slate-400">
@@ -1324,22 +1218,26 @@ export default function FundNetworkPage() {
                   ) : (
                     visibleDbPositions.map((p) => {
                       const stage = statusToStage(p.status);
+                      const total = computeAccruedTotalUsddd(p);
+
                       return (
                         <tr key={p.id} className="border-b border-slate-800/40 align-top">
                           <td className="py-2 pr-4">{p.position_ref}</td>
 
                           <td className="py-2 pr-4 font-mono break-all text-[11px] text-slate-300">
-                            {p.issued_deposit_address.slice(0, 10)}…{p.issued_deposit_address.slice(-6)}
+                            {p.issued_deposit_address.slice(0, 10)}...{p.issued_deposit_address.slice(-6)}
                           </td>
 
-                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "—"}</td>
-
-                          <td className="py-2 pr-4">
-                            {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">—</span>}
+                          <td className="py-2 pr-4 text-right">
+                            {Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "--"}
                           </td>
 
                           <td className="py-2 pr-4">
-                            {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">—</span>}
+                            {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">--</span>}
+                          </td>
+
+                          <td className="py-2 pr-4">
+                            {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">--</span>}
                           </td>
 
                           <td className="py-2 pr-4">
@@ -1349,18 +1247,15 @@ export default function FundNetworkPage() {
                                 <div className="text-slate-500">{Number(p.gas_topup_bnb ?? 0) ? `${fmtDec(Number(p.gas_topup_bnb), 6)} BNB` : ""}</div>
                               </div>
                             ) : (
-                              <span className="text-slate-600">—</span>
+                              <span className="text-slate-600">--</span>
                             )}
                           </td>
 
-                          <td className="py-2 pr-4 text-right">{p.usddd_allocated == null ? "-" : Number(p.usddd_allocated).toFixed(2)}</td>
-
                           <td className="py-2 pr-4 text-right">
-                            {(() => {
-                              const total = computeAccruedTotalUsddd(p);
-                              return total == null ? "-" : fmtDec(total, 4);
-                            })()}
+                            {p.usddd_allocated == null ? "--" : Number(p.usddd_allocated).toFixed(2)}
                           </td>
+
+                          <td className="py-2 pr-4 text-right">{total == null ? "--" : fmtDec(total, 4)}</td>
 
                           <td className="py-2 pr-2">
                             <div className="text-slate-200">{stage.title}</div>
