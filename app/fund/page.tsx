@@ -418,7 +418,7 @@ export default function FundNetworkPage() {
 
     const tick = async () => {
       try {
-        const r = await fetch("/api/fund/summary", { cache: "no-store" });
+        const r = await fetch("/api/fund/summary");
         const j: any = await r.json().catch(() => null);
         if (!cancelled && j?.ok) {
           setFundSummary({
@@ -433,7 +433,7 @@ export default function FundNetworkPage() {
     };
 
     tick();
-    const t = setInterval(tick, 10000);
+    const t = setInterval(tick, 60000);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -450,7 +450,7 @@ export default function FundNetworkPage() {
     };
 
     tick();
-    const t = setInterval(tick, 10000);
+    const t = setInterval(tick, 60000);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -464,7 +464,7 @@ export default function FundNetworkPage() {
 
     (async () => {
       try {
-        const r = await fetch("/api/meta/build", { cache: "no-store" });
+        const r = await fetch("/api/meta/build");
         const j: any = await r.json().catch(() => null);
         const m = coerceMeta(j);
         if (!cancelled && m) setMeta(m);
@@ -475,7 +475,7 @@ export default function FundNetworkPage() {
 
     (async () => {
       try {
-        const r = await fetch("/api/activity/24h", { cache: "no-store" });
+        const r = await fetch("/api/activity/24h");
         const j: any = await r.json().catch(() => null);
         const a = coerceActivity(j);
         if (!cancelled && a) setActivity(a);

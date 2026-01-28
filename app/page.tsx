@@ -140,7 +140,7 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/golden/today", { cache: "no-store" });
+        const res = await fetch("/api/golden/today");
         const json: any = await res.json();
         if (!res.ok || !json?.ok) return;
         const count = Number(json?.count ?? 0);
@@ -177,7 +177,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/activity/24h", { cache: "no-store" });
+        const res = await fetch("/api/activity/24h");
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         if (!cancelled) setData(json);
@@ -356,7 +356,7 @@ function LatestGoldenFindsTable({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/golden-finds/latest?limit=10", { cache: "no-store" });
+        const res = await fetch("/api/golden-finds/latest?limit=10");
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         const dataRows =
@@ -430,7 +430,7 @@ function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/boxes/balances?limit=10", { cache: "no-store" });
+        const res = await fetch("/api/boxes/balances?limit=10");
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         const dataRows =
@@ -510,7 +510,7 @@ function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/leaderboards/golden-winners?limit=5", { cache: "no-store" });
+        const res = await fetch("/api/leaderboards/golden-winners?limit=5");
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         const dataRows =
@@ -661,7 +661,7 @@ export default function Home() {
   const [refreshTick, setRefreshTick] = React.useState(0);
 
   React.useEffect(() => {
-    const t = setInterval(() => setRefreshTick((v) => v + 1), 20000);
+    const t = setInterval(() => setRefreshTick((v) => v + 1), 60000);
     return () => clearInterval(t);
   }, []);
 
@@ -670,7 +670,7 @@ export default function Home() {
 
     (async () => {
       try {
-        const res = await fetch("/api/meta/build", { cache: "no-store" });
+        const res = await fetch("/api/meta/build");
         const json: unknown = await res.json();
         if (!cancelled && json && typeof json === "object") {
           setMeta(json as BuildMeta);
