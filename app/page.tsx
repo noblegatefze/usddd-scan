@@ -760,14 +760,24 @@ function PayoutModalBody({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">From</div>
-          <div className="mt-1 font-mono text-[13px] text-slate-200">{data.payout_from ?? "-"}</div>
-          <div className="mt-1 text-[12px] text-slate-500">{maskAddr(data.payout_from)}</div>
+          <div
+            className="mt-1 font-mono text-[13px] text-slate-200"
+            title={data.payout_from ?? ""}
+          >
+            {maskAddr(data.payout_from)}
+          </div>
+
         </div>
 
         <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">To</div>
-          <div className="mt-1 font-mono text-[13px] text-slate-200">{data.payout_to ?? "-"}</div>
-          <div className="mt-1 text-[12px] text-slate-500">{maskAddr(data.payout_to)}</div>
+          <div
+            className="mt-1 font-mono text-[13px] text-slate-200"
+            title={data.payout_to ?? ""}
+          >
+            {maskAddr(data.payout_to)}
+          </div>
+
         </div>
       </div>
 
@@ -998,8 +1008,6 @@ export default function Home() {
         open={modal.open && modal.key === "payout"}
         title="Phase Zero Golden Find Payout"
         onClose={closeModal}
-        primaryLabel="Close"
-        primaryHref="#"
       >
         <PayoutModalBody claim={payoutClaim} terminalHref={LINKS.terminal} />
       </ScanModal>
