@@ -6,8 +6,13 @@ function shortHash(h: string) {
   return `${s.slice(0, 10)}…${s.slice(-6)}`;
 }
 
-export default function TxPage({ params }: { params: { hash: string } }) {
-  const hash = decodeURIComponent(params.hash || "").trim();
+export default async function TxPage({
+  params,
+}: {
+  params: Promise<{ hash: string }>;
+}) {
+  const { hash: rawHash } = await params;
+  const hash = decodeURIComponent(rawHash || "").trim();
   const isHex = /^0x[a-fA-F0-9]{64}$/.test(hash);
 
   // Your request: always BscScan
@@ -54,11 +59,10 @@ export default function TxPage({ params }: { params: { hash: string } }) {
                 href={bscscan ?? "#"}
                 target="_blank"
                 rel="noreferrer"
-                className={`rounded-lg px-3 py-2 text-center text-[12px] font-semibold ${
-                  bscscan
+                className={`rounded-lg px-3 py-2 text-center text-[12px] font-semibold ${bscscan
                     ? "bg-slate-200 text-slate-950 hover:bg-white"
                     : "bg-slate-800 text-slate-500 cursor-not-allowed"
-                }`}
+                  }`}
                 aria-disabled={!bscscan}
                 onClick={(e) => {
                   if (!bscscan) e.preventDefault();
