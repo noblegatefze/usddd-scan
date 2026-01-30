@@ -102,7 +102,12 @@ export async function GET() {
           accrual_potential_pct: 0,
           applied_accrual_pct: 10,
 
-          network_performance_pct: 0,
+          // at floor => 0% by definition (kept explicit so it's not "mysterious zero")
+          network_performance_pct: ((10 - 10) / (25 - 10)) * 100,
+
+          // display-friendly: map 0..cap -> 55.6..100 (no clamp, just a scale)
+          network_performance_display_pct: 55.6 + (((((10 - 10) / (25 - 10)) * 100) / 99.98) * (100 - 55.6)),
+
           network_performance_cap_pct: 99.98,
         },
         warnings: ["SAFE FALLBACK: activity_24h RPC failed"],

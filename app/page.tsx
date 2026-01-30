@@ -220,7 +220,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
   const rewardEff = Number(model.reward_efficiency_usd_per_usddd ?? 0) || 0;
   const accrualPotential = Number(model.accrual_potential_pct ?? 0) || 0;
-  const netPerf = Number(model.network_performance_pct ?? 0) || 0;
+  const netPerf = Number(model.network_performance_display_pct ?? model.network_performance_pct ?? 0) || 0;
   const effDelta = Number(model.efficiency_delta_usd_per_usddd ?? 0) || 0;
 
   // subtle value styling (protocol tone)
