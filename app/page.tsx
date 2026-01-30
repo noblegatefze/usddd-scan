@@ -28,7 +28,6 @@ type GoldenFindRow = {
   token: string | null;
   chain: string | null;
   usd: number;
-  tx?: string | null; // NEW
 };
 
 type BoxBalanceRow = {
@@ -411,20 +410,7 @@ function LatestGoldenFindsTable({ refreshTick }: { refreshTick: number }) {
                   <td className="py-2 pr-2 font-mono text-slate-200 truncate">{r.claim ?? "-"}</td>
                   <td className="py-2 pr-2 truncate">{r.winner}</td>
                   <td className="hidden sm:table-cell py-2 pr-2 truncate">{r.token ?? "-"}</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {r.tx ? (
-                      <a
-                        href={`/tx/${encodeURIComponent(r.tx)}`}
-                        className="inline-flex items-center justify-end gap-1 text-slate-200 hover:text-slate-50 underline underline-offset-2 decoration-slate-600 hover:decoration-slate-300"
-                        title="View payment tx"
-                      >
-                        {fmtUsd(r.usd ?? 0)}
-                        <span className="text-[11px] text-slate-500">↗</span>
-                      </a>
-                    ) : (
-                      <span className="text-slate-300">{fmtUsd(r.usd ?? 0)}</span>
-                    )}
-                  </td>
+                  <td className="py-2 text-right tabular-nums">{fmtUsd(r.usd ?? 0)}</td>
                 </tr>
               ))
             )}
