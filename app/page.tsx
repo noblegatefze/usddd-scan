@@ -347,7 +347,13 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   );
 }
 
-function LatestGoldenFindsTable({ refreshTick }: { refreshTick: number }) {
+function LatestGoldenFindsTable({
+  refreshTick,
+  onOpenPayout,
+}: {
+  refreshTick: number;
+  onOpenPayout: (claim: string | null | undefined) => void;
+}) {
   const [rows, setRows] = React.useState<GoldenFindRow[]>([]);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -410,7 +416,17 @@ function LatestGoldenFindsTable({ refreshTick }: { refreshTick: number }) {
                   <td className="py-2 pr-2 font-mono text-slate-200 truncate">{r.claim ?? "-"}</td>
                   <td className="py-2 pr-2 truncate">{r.winner}</td>
                   <td className="hidden sm:table-cell py-2 pr-2 truncate">{r.token ?? "-"}</td>
-                  <td className="py-2 text-right tabular-nums">{fmtUsd(r.usd ?? 0)}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    <button
+                      type="button"
+                      onClick={() => onOpenPayout(r.claim)}
+                      className="inline-flex items-center justify-end gap-1 underline underline-offset-2 decoration-slate-700 hover:decoration-slate-300"
+                      title="View payout"
+                    >
+                      {fmtUsd(r.usd ?? 0)}
+                      <span className="text-[11px] text-slate-500">↗</span>
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -635,6 +651,171 @@ function ScanModal({
   );
 }
 
+type PayoutInfo = {
+  ok: boolean;
+  claim_code: string;
+  token: string | null;
+  chain: string | null;
+  usd_value: number | string | null;
+  golden_at: string | null;
+
+  status: "PAID" | "PENDING" | "UNCLAIMED";
+  claimed_at: string | null;
+
+  payout_from: string | null;
+  payout_to: string | null;
+
+  paid_at: string | null;
+  paid_tx_hash: string | null;
+};
+
+function maskAddr(a: string | null | undefined) {
+  const s = (a ?? "").trim();
+  if (!s) return "-";
+  if (s.length <= 14) return s;
+  return `${s.slice(0, 6)}…${s.slice(-4)}`;
+}
+
+function fmtTs(ts: string | null | undefined) {
+  if (!ts) return "-";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toISOString().replace("T", " ").replace("Z", " UTC");
+}
+
+function StatusPill({ status }: { status: PayoutInfo["status"] }) {
+  const base = "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold";
+  if (status === "PAID") return <span className={`${base} border-emerald-500/30 bg-emerald-950/30 text-emerald-200`}>PAID</span>;
+  if (status === "PENDING") return <span className={`${base} border-amber-500/30 bg-amber-950/20 text-amber-200`}>PENDING</span>;
+  return <span className={`${base} border-slate-700 bg-slate-900/40 text-slate-300`}>UNCLAIMED</span>;
+}
+
+function PayoutModalBody({
+  claim,
+  terminalHref,
+}: {
+  claim: string | null;
+  terminalHref: string;
+}) {
+  const [data, setData] = React.useState<PayoutInfo | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!claim) return;
+      setLoading(true);
+      setErr(null);
+      try {
+        const res = await fetch(`/api/golden-finds/payment?claim=${encodeURIComponent(claim)}`);
+        const json: any = await res.json();
+        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+        if (!cancelled) setData(json as PayoutInfo);
+      } catch (e: any) {
+        if (!cancelled) setErr(String(e?.message ?? e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [claim]);
+
+  if (!claim) {
+    return <div className="text-[13px] text-slate-400">No claim selected.</div>;
+  }
+
+  if (loading && !data) {
+    return <div className="text-[13px] text-slate-400">Loading payout…</div>;
+  }
+
+  if (err) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-[13px] text-red-200">
+        Failed to load payout: {err}
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const tx = (data.paid_tx_hash ?? "").trim();
+  const bscTx = tx ? `https://bscscan.com/tx/${tx}` : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[13px] text-slate-300">
+          <span className="font-mono text-slate-200">{data.claim_code}</span>{" "}
+          <span className="text-slate-500">•</span>{" "}
+          <span className="text-slate-200">{data.token ?? "-"}</span>{" "}
+          <span className="text-slate-500">•</span>{" "}
+          <span className="tabular-nums text-slate-200">{fmtUsd(Number(data.usd_value ?? 0))}</span>
+        </div>
+        <StatusPill status={data.status} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">From</div>
+          <div className="mt-1 font-mono text-[13px] text-slate-200">{data.payout_from ?? "-"}</div>
+          <div className="mt-1 text-[12px] text-slate-500">{maskAddr(data.payout_from)}</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">To</div>
+          <div className="mt-1 font-mono text-[13px] text-slate-200">{data.payout_to ?? "-"}</div>
+          <div className="mt-1 text-[12px] text-slate-500">{maskAddr(data.payout_to)}</div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Paid at</div>
+            <div className="mt-1 text-[13px] text-slate-200">{fmtTs(data.paid_at)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Tx hash</div>
+            <div className="mt-1 font-mono text-[13px] break-all text-slate-200">{tx || "-"}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <a
+          href={bscTx ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className={`rounded-lg px-3 py-2 text-[12px] font-semibold ${bscTx ? "bg-slate-200 text-slate-950 hover:bg-white" : "bg-slate-800 text-slate-500 cursor-not-allowed"
+            }`}
+          aria-disabled={!bscTx}
+          onClick={(e) => {
+            if (!bscTx) e.preventDefault();
+          }}
+        >
+          Open on BscScan ↗
+        </a>
+
+        <a
+          href={terminalHref}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-lg border border-slate-800 bg-transparent px-3 py-2 text-[12px] text-slate-200 hover:border-slate-700 hover:bg-slate-900/30"
+        >
+          Open Terminal ↗
+        </a>
+      </div>
+
+      <div className="text-[12px] text-slate-500">
+        Note: BscScan shows the on-chain sender/recipient details. This modal reflects what was recorded in Phase Zero.
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [paused, setPaused] = useState(false);
 
@@ -648,15 +829,22 @@ export default function Home() {
     return () => { alive = false; };
   }, []);
 
-
-
   const [meta, setMeta] = React.useState<BuildMeta | null>(null);
 
-  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden" | "search";
+  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden" | "search" | "payout";
   const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({ open: false, key: null });
 
   const openModal = (key: ModalKey) => setModal({ open: true, key });
   const closeModal = () => setModal({ open: false, key: null });
+
+  const [payoutClaim, setPayoutClaim] = React.useState<string | null>(null);
+
+  const openPayout = (claim: string | null | undefined) => {
+    const c = (claim ?? "").trim();
+    if (!c) return;
+    setPayoutClaim(c);
+    openModal("payout");
+  };
 
   const [refreshTick, setRefreshTick] = React.useState(0);
 
@@ -805,6 +993,16 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      <ScanModal
+        open={modal.open && modal.key === "payout"}
+        title="Phase Zero Golden Find Payout"
+        onClose={closeModal}
+        primaryLabel="Close"
+        primaryHref="#"
+      >
+        <PayoutModalBody claim={payoutClaim} terminalHref={LINKS.terminal} />
+      </ScanModal>
 
       <ScanModal
         open={modal.open && modal.key === "testnet"}
@@ -1021,7 +1219,7 @@ export default function Home() {
               </div>
             </div>
 
-            <LatestGoldenFindsTable refreshTick={refreshTick} />
+            <LatestGoldenFindsTable refreshTick={refreshTick} onOpenPayout={openPayout} />
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <div className="text-[12px] text-slate-400">Use the Terminal to DIG and earn rewards.</div>
