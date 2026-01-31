@@ -150,6 +150,12 @@ export async function GET() {
       { dig_success: 0, usddd_spent: 0, reward_usd: 0 }
     );
 
+    // TEMP QUICKFIX (display only):
+    // stats_events.usddd_cost appears overstated vs real per-dig fuel (expected efficiency ~5-7).
+    // We'll patch properly by sourcing true dig cost and rebuilding rollup.
+    const TEMP_USDDD_UTIL_SCALE = 6;
+    const usdddSpentAdj = sums.usddd_spent / TEMP_USDDD_UTIL_SCALE;
+
     // Keep payload shape stable for the UI
     const payload: any = {
       ok: true,
@@ -170,12 +176,11 @@ export async function GET() {
         terminal_users: 0,
       },
       money: {
-        claims_value_usd: sums.reward_usd, // previously "claims_value_usd" used reward_value_usd in the old money RPC
-        usddd_spent: sums.usddd_spent,
+        claims_value_usd: sums.reward_usd, // sum of token rewards at dig-time CMC price (USD)
+        usddd_spent: usdddSpentAdj, // TEMP: scaled down for display sanity
       },
       model: {
-        reward_efficiency_usd_per_usddd:
-          sums.usddd_spent > 0 ? sums.reward_usd / sums.usddd_spent : 0,
+        reward_efficiency_usd_per_usddd: usdddSpentAdj > 0 ? sums.reward_usd / usdddSpentAdj : 0,
         reward_efficiency_prev_usd_per_usddd: 0,
         efficiency_delta_usd_per_usddd: 0,
 
@@ -190,6 +195,7 @@ export async function GET() {
       },
       warnings: [
         "ROLLUP MODE: /api/activity/24h served from stats_events_rollup_1m to protect DB",
+        "TEMP FIX: usddd_utilized scaled down x6 for display; true dig cost source will be patched",
       ],
     };
 
