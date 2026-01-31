@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const revalidate = 60; // cache this route for 60s at the edge/server
+export const dynamic = "force-dynamic";
 
 function iso(d: Date) {
   return d.toISOString();
