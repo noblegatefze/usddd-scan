@@ -131,7 +131,7 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
   React.useEffect(() => {
     const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
     tick();
-    const t = setInterval(tick, 1000);
+    const t = setInterval(tick, 60000);
 
     return () => clearInterval(t);
   }, []);

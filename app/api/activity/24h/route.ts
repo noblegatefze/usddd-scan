@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
+export const revalidate = 60; // cache this route for 60s at the edge/server
 
 function iso(d: Date) {
   return d.toISOString();
