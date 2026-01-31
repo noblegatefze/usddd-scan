@@ -13,6 +13,17 @@ function iso(d: Date) {
   return d.toISOString();
 }
 
+async function maybeRefreshRollup(supabase: any) {
+  try {
+    // Refresh occasionally to avoid request stampede
+    if (Math.random() < 0.1) {
+      await supabase.rpc("rpc_rollup_stats_events_1m", { last_minutes: 5 });
+    }
+  } catch {
+    // Never block the response
+  }
+}
+
 function addNetworkPerformanceDisplay(data: any) {
   // Add display-friendly network performance (0..cap -> 55.6..100)
   // This is NOT a clamp. It's a UI scale so "floor" doesn't look dead.
@@ -117,6 +128,8 @@ export async function GET() {
     if (row && row.pause_all && !bypassPause) {
       return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     }
+
+    await maybeRefreshRollup(supabase);
 
     // FAST PATH: read from 1-minute rollup (avoids 24h aggregation over stats_events)
     const { data: roll, error: rollErr } = await supabase
