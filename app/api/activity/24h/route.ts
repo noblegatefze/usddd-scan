@@ -44,7 +44,7 @@ function buildSafePayload(
     counts: {
       sessions_24h: 0,
       protocol_actions: 0,
-      claims_executed: 0,
+      claims_executed: 0, // == Finds (24h)
       claim_reserves: 0,
       unique_claimers: 0,
       ledger_entries: 0,
@@ -52,8 +52,8 @@ function buildSafePayload(
       terminal_users: 0,
     },
     money: {
-      claims_value_usd: 0,
-      usddd_spent: 0,
+      claims_value_usd: 0, // keep from rollup until rewards ledger exists
+      usddd_spent: 0,      // canonical spend
     },
     model: {
       reward_efficiency_usd_per_usddd: 0,
@@ -80,9 +80,7 @@ export async function GET() {
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
 
-  // ------------------------------------------------------------
-  // BUILD GUARD (prevents Supabase calls during Vercel build)
-  // ------------------------------------------------------------
+  // BUILD GUARD
   if (process.env.NEXT_PHASE === "phase-production-build") {
     return NextResponse.json(
       buildSafePayload(
@@ -109,51 +107,49 @@ export async function GET() {
       auth: { persistSession: false },
     });
 
-    // ------------------------------------------------------------
-    // Maintenance gate (DB-authoritative)
-    // ------------------------------------------------------------
-    const { data: flags, error: flagsErr } = await supabase.rpc(
-      "rpc_admin_flags"
-    );
+    // Maintenance gate
+    const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
     if (flagsErr) throw flagsErr;
 
     const row: any = Array.isArray(flags) ? flags[0] : flags;
     const bypassPause = process.env.BYPASS_PAUSE === "1";
-
     if (row?.pause_all && !bypassPause) {
       return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     }
 
-    // ------------------------------------------------------------
-    // CANONICAL MONEY:
-    // USDDD Utilized must come from dd_usddd_spend_ledger (truth)
-    // ------------------------------------------------------------
-    const [spendSumRes, spendCountRes] = await Promise.all([
-      supabase
-        .from("dd_usddd_spend_ledger")
-        .select("usddd_amount", { head: false })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
+    // ----------------------------
+    // CANONICAL: Find + Spend ledger
+    // Only trust spend_key like 'dig:%'
+    // ----------------------------
+    const { data: spendRows, error: spendErr } = await supabase
+      .from("dd_usddd_spend_ledger")
+      .select("usddd_amount, terminal_user_id, spend_key, created_at")
+      .like("spend_key", "dig:%")
+      .gte("created_at", iso(start))
+      .lt("created_at", iso(end));
 
-      supabase
-        .from("dd_usddd_spend_ledger")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
-    ]);
+    if (spendErr) throw spendErr;
 
-    if (spendSumRes.error) throw spendSumRes.error;
-    if (spendCountRes.error) throw spendCountRes.error;
-
-    const usdddSpent = (spendSumRes.data ?? []).reduce(
+    const usdddSpent = (spendRows ?? []).reduce(
       (acc: number, r: any) => acc + Number(r?.usddd_amount ?? 0),
       0
     );
 
-    // ------------------------------------------------------------
+    const finds24h = (spendRows ?? []).length;
+
+    // unique claimers = distinct terminal_user_id in canonical spend rows
+    // (computed in JS to avoid expensive SQL distinct)
+    const uniq = new Set<string>();
+    for (const r of spendRows ?? []) {
+      const id = r?.terminal_user_id;
+      if (id) uniq.add(String(id));
+    }
+    const uniqueClaimers = uniq.size;
+
+    // ----------------------------
     // Value Distributed (USD)
-    // TEMP: keep from stats rollup (telemetry), until rewards ledger exists
-    // ------------------------------------------------------------
+    // TEMP: keep from rollup (telemetry) until rewards ledger exists
+    // ----------------------------
     const { data: roll, error: rollErr } = await supabase
       .from("stats_events_rollup_1m")
       .select("reward_usd, bucket_minute")
@@ -167,38 +163,16 @@ export async function GET() {
       0
     );
 
-    // ------------------------------------------------------------
+    // ----------------------------
     // LIGHT QUERIES (indexed)
-    // ------------------------------------------------------------
-    const [
-      sessionsRes,
-      executedClaimsRes,
-      executedClaimersRes,
-      ledgerRes,
-      goldenRes,
-      usersRes,
-    ] = await Promise.all([
+    // ----------------------------
+    const [sessionsRes, ledgerRes, goldenRes, usersRes] = await Promise.all([
       supabase
         .from("dd_sessions")
         .select("session_id", { count: "exact", head: true })
         .gte("created_at", iso(start))
         .lt("created_at", iso(end)),
 
-      // Claims Executed = withdrawn_at in window
-      supabase
-        .from("dd_treasure_claims")
-        .select("id", { count: "exact", head: true })
-        .gte("withdrawn_at", iso(start))
-        .lt("withdrawn_at", iso(end)),
-
-      // Unique claimers based on executed claims
-      supabase
-        .from("dd_treasure_claims")
-        .select("user_id", { count: "exact", head: true })
-        .gte("withdrawn_at", iso(start))
-        .lt("withdrawn_at", iso(end)),
-
-      // Protocol actions proxy = ledger entries (still fine)
       supabase
         .from("dd_box_ledger")
         .select("id", { count: "exact", head: true })
@@ -218,13 +192,9 @@ export async function GET() {
         .lt("created_at", iso(end)),
     ]);
 
-    // Note: Supabase count on "user_id" is row count, not distinct.
-    // We'll keep it as-is to avoid heavy distinct queries.
-    // If you want true distinct, we’ll add an RPC later.
-
     const payload: any = {
       ok: true,
-      mode: "canonical_ledger_plus_dd",
+      mode: "canonical_dig_ledger",
       window: {
         start: start.toISOString(),
         end: end.toISOString(),
@@ -233,9 +203,9 @@ export async function GET() {
       counts: {
         sessions_24h: sessionsRes.count ?? 0,
         protocol_actions: ledgerRes.count ?? 0,
-        claims_executed: executedClaimsRes.count ?? 0,
-        claim_reserves: spendCountRes.count ?? 0, // number of spend rows as a proxy reserve count
-        unique_claimers: executedClaimersRes.count ?? 0,
+        claims_executed: finds24h,          // == Finds (24h)
+        claim_reserves: finds24h,           // reserve rows == finds rows (canonical dig)
+        unique_claimers: uniqueClaimers,    // distinct terminal_user_id
         ledger_entries: ledgerRes.count ?? 0,
         golden_events: goldenRes.count ?? 0,
         terminal_users: usersRes.count ?? 0,
@@ -261,7 +231,7 @@ export async function GET() {
         network_performance_cap_pct: 99.98,
       },
       warnings: [
-        "CANONICAL MODE: USDDD utilized from dd_usddd_spend_ledger (truth).",
+        "CANONICAL: spend/finds derived from dd_usddd_spend_ledger where spend_key like 'dig:%'.",
         "NOTE: Value Distributed (USD) still sourced from rollup until rewards ledger is added.",
       ],
     };
