@@ -9,16 +9,6 @@ function iso(d: Date) {
   return d.toISOString();
 }
 
-async function maybeRefreshRollup(supabase: any) {
-  try {
-    if (Math.random() < 0.1) {
-      await supabase.rpc("rpc_rollup_stats_events_1m", { last_minutes: 5 });
-    }
-  } catch {
-    // never block response
-  }
-}
-
 function addNetworkPerformanceDisplay(data: any) {
   try {
     const m = data?.model;
@@ -134,35 +124,56 @@ export async function GET() {
       return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     }
 
-    await maybeRefreshRollup(supabase);
+    // ------------------------------------------------------------
+    // CANONICAL MONEY:
+    // USDDD Utilized must come from dd_usddd_spend_ledger (truth)
+    // ------------------------------------------------------------
+    const [spendSumRes, spendCountRes] = await Promise.all([
+      supabase
+        .from("dd_usddd_spend_ledger")
+        .select("usddd_amount", { head: false })
+        .gte("created_at", iso(start))
+        .lt("created_at", iso(end)),
+
+      supabase
+        .from("dd_usddd_spend_ledger")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", iso(start))
+        .lt("created_at", iso(end)),
+    ]);
+
+    if (spendSumRes.error) throw spendSumRes.error;
+    if (spendCountRes.error) throw spendCountRes.error;
+
+    const usdddSpent = (spendSumRes.data ?? []).reduce(
+      (acc: number, r: any) => acc + Number(r?.usddd_amount ?? 0),
+      0
+    );
 
     // ------------------------------------------------------------
-    // FAST PATH: rollup for heavy metrics (SAFE)
+    // Value Distributed (USD)
+    // TEMP: keep from stats rollup (telemetry), until rewards ledger exists
     // ------------------------------------------------------------
     const { data: roll, error: rollErr } = await supabase
       .from("stats_events_rollup_1m")
-      .select("usddd_spent, reward_usd, bucket_minute")
+      .select("reward_usd, bucket_minute")
       .gte("bucket_minute", iso(start))
       .lt("bucket_minute", iso(end));
 
     if (rollErr) throw rollErr;
 
-    const sums = (roll ?? []).reduce(
-      (acc: any, r: any) => {
-        acc.usddd_spent += Number(r.usddd_spent ?? 0);
-        acc.reward_usd += Number(r.reward_usd ?? 0);
-        return acc;
-      },
-      { usddd_spent: 0, reward_usd: 0 }
+    const rewardUsd = (roll ?? []).reduce(
+      (acc: number, r: any) => acc + Number(r?.reward_usd ?? 0),
+      0
     );
 
     // ------------------------------------------------------------
-    // LIGHT QUERIES (indexed, safe)
+    // LIGHT QUERIES (indexed)
     // ------------------------------------------------------------
     const [
       sessionsRes,
-      claimsRes,
-      claimersRes,
+      executedClaimsRes,
+      executedClaimersRes,
       ledgerRes,
       goldenRes,
       usersRes,
@@ -173,18 +184,21 @@ export async function GET() {
         .gte("created_at", iso(start))
         .lt("created_at", iso(end)),
 
+      // Claims Executed = withdrawn_at in window
       supabase
         .from("dd_treasure_claims")
         .select("id", { count: "exact", head: true })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
+        .gte("withdrawn_at", iso(start))
+        .lt("withdrawn_at", iso(end)),
 
+      // Unique claimers based on executed claims
       supabase
         .from("dd_treasure_claims")
         .select("user_id", { count: "exact", head: true })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
+        .gte("withdrawn_at", iso(start))
+        .lt("withdrawn_at", iso(end)),
 
+      // Protocol actions proxy = ledger entries (still fine)
       supabase
         .from("dd_box_ledger")
         .select("id", { count: "exact", head: true })
@@ -204,9 +218,13 @@ export async function GET() {
         .lt("created_at", iso(end)),
     ]);
 
+    // Note: Supabase count on "user_id" is row count, not distinct.
+    // We'll keep it as-is to avoid heavy distinct queries.
+    // If you want true distinct, we’ll add an RPC later.
+
     const payload: any = {
       ok: true,
-      mode: "rollup_1m_plus_dd",
+      mode: "canonical_ledger_plus_dd",
       window: {
         start: start.toISOString(),
         end: end.toISOString(),
@@ -215,22 +233,20 @@ export async function GET() {
       counts: {
         sessions_24h: sessionsRes.count ?? 0,
         protocol_actions: ledgerRes.count ?? 0,
-        claims_executed: claimsRes.count ?? 0,
-        claim_reserves: 0,
-        unique_claimers: claimersRes.count ?? 0,
+        claims_executed: executedClaimsRes.count ?? 0,
+        claim_reserves: spendCountRes.count ?? 0, // number of spend rows as a proxy reserve count
+        unique_claimers: executedClaimersRes.count ?? 0,
         ledger_entries: ledgerRes.count ?? 0,
         golden_events: goldenRes.count ?? 0,
         terminal_users: usersRes.count ?? 0,
       },
       money: {
-        claims_value_usd: sums.reward_usd,
-        usddd_spent: sums.usddd_spent,
+        claims_value_usd: rewardUsd,
+        usddd_spent: usdddSpent,
       },
       model: {
         reward_efficiency_usd_per_usddd:
-          sums.usddd_spent > 0
-            ? sums.reward_usd / sums.usddd_spent
-            : 0,
+          usdddSpent > 0 ? rewardUsd / usdddSpent : 0,
 
         reward_efficiency_prev_usd_per_usddd: 0,
         efficiency_delta_usd_per_usddd: 0,
@@ -245,7 +261,8 @@ export async function GET() {
         network_performance_cap_pct: 99.98,
       },
       warnings: [
-        "ROLLUP MODE: heavy metrics from stats_events_rollup_1m; counts from dd_* tables",
+        "CANONICAL MODE: USDDD utilized from dd_usddd_spend_ledger (truth).",
+        "NOTE: Value Distributed (USD) still sourced from rollup until rewards ledger is added.",
       ],
     };
 
