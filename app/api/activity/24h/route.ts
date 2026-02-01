@@ -53,7 +53,7 @@ function buildSafePayload(
     },
     money: {
       claims_value_usd: 0, // canonical USD value distributed
-      usddd_spent: 0,      // canonical spend
+      usddd_spent: 0, // canonical spend
     },
     model: {
       reward_efficiency_usd_per_usddd: 0,
@@ -159,14 +159,82 @@ export async function GET() {
 
     const rewardUsd = (reserveRows ?? []).reduce((acc: number, r: any) => {
       const amount = Number(r?.amount ?? 0);
-
-      // meta is jsonb; Supabase returns it as an object
       const priceRaw = (r?.meta as any)?.price_usd_at_dig;
       const price = Number(priceRaw ?? 0);
 
       if (amount > 0 && price > 0) acc += amount * price;
       return acc;
     }, 0);
+
+    // ----------------------------
+    // MODEL: efficiency + accrual + previous window delta
+    // ----------------------------
+    const accrualScalingPct = 3;
+    const accrualFloorPct = 10;
+    const accrualCapPct = 25;
+    const perfCap = 99.98;
+
+    const rewardEfficiency = usdddSpent > 0 ? rewardUsd / usdddSpent : 0;
+
+    // previous window: [start-24h, start)
+    const prevStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+    const prevEnd = start;
+
+    // prev canonical spend rows
+    const { data: prevSpendRows, error: prevSpendErr } = await supabase
+      .from("dd_usddd_spend_ledger")
+      .select("usddd_amount")
+      .like("spend_key", "dig:%")
+      .gte("created_at", iso(prevStart))
+      .lt("created_at", iso(prevEnd));
+
+    if (prevSpendErr) throw prevSpendErr;
+
+    const prevUsdddSpent = (prevSpendRows ?? []).reduce(
+      (acc: number, r: any) => acc + Number(r?.usddd_amount ?? 0),
+      0
+    );
+
+    // prev canonical reserves for USD distributed
+    const { data: prevReserveRows, error: prevReserveErr } = await supabase
+      .from("dd_box_ledger")
+      .select("amount, meta")
+      .eq("entry_type", "claim_reserve")
+      .gte("created_at", iso(prevStart))
+      .lt("created_at", iso(prevEnd));
+
+    if (prevReserveErr) throw prevReserveErr;
+
+    const prevRewardUsd = (prevReserveRows ?? []).reduce((acc: number, r: any) => {
+      const amount = Number(r?.amount ?? 0);
+      const priceRaw = (r?.meta as any)?.price_usd_at_dig;
+      const price = Number(priceRaw ?? 0);
+
+      if (amount > 0 && price > 0) acc += amount * price;
+      return acc;
+    }, 0);
+
+    const prevRewardEfficiency =
+      prevUsdddSpent > 0 ? prevRewardUsd / prevUsdddSpent : 0;
+
+    const efficiencyDelta = rewardEfficiency - prevRewardEfficiency;
+
+    // performance: current vs previous (0..cap)
+    let networkPerformancePct = 0;
+    if (prevRewardEfficiency > 0 && rewardEfficiency >= 0) {
+      const ratio = (rewardEfficiency / prevRewardEfficiency) * 100;
+      networkPerformancePct = Math.max(0, Math.min(ratio, perfCap));
+    }
+
+    // accrual potential = efficiency × scaling (%)
+    const accrualPotentialPct = rewardEfficiency * accrualScalingPct;
+
+    // applied accrual = clamp( potential, floor, cap )
+    // (kept as a policy value; potential is observational)
+    const appliedAccrualPct = Math.max(
+      accrualFloorPct,
+      Math.min(accrualPotentialPct, accrualCapPct)
+    );
 
     // ----------------------------
     // LIGHT QUERIES (indexed)
@@ -208,8 +276,8 @@ export async function GET() {
       counts: {
         sessions_24h: sessionsRes.count ?? 0,
         protocol_actions: ledgerRes.count ?? 0,
-        claims_executed: finds24h,       // == Finds (24h)
-        claim_reserves: finds24h,        // == reserve count (canonical)
+        claims_executed: finds24h, // == Finds (24h)
+        claim_reserves: finds24h, // == reserve count (canonical)
         unique_claimers: uniqueClaimers, // distinct terminal_user_id
         ledger_entries: ledgerRes.count ?? 0,
         golden_events: goldenRes.count ?? 0,
@@ -220,24 +288,23 @@ export async function GET() {
         usddd_spent: usdddSpent,
       },
       model: {
-        reward_efficiency_usd_per_usddd:
-          usdddSpent > 0 ? rewardUsd / usdddSpent : 0,
+        reward_efficiency_usd_per_usddd: rewardEfficiency,
+        reward_efficiency_prev_usd_per_usddd: prevRewardEfficiency,
+        efficiency_delta_usd_per_usddd: efficiencyDelta,
 
-        reward_efficiency_prev_usd_per_usddd: 0,
-        efficiency_delta_usd_per_usddd: 0,
+        accrual_scaling_pct: accrualScalingPct,
+        accrual_floor_pct: accrualFloorPct,
+        accrual_cap_pct: accrualCapPct,
+        accrual_potential_pct: accrualPotentialPct,
+        applied_accrual_pct: appliedAccrualPct,
 
-        accrual_scaling_pct: 3,
-        accrual_floor_pct: 10,
-        accrual_cap_pct: 25,
-        accrual_potential_pct: 0,
-        applied_accrual_pct: 10,
-
-        network_performance_pct: 0,
-        network_performance_cap_pct: 99.98,
+        network_performance_pct: networkPerformancePct,
+        network_performance_cap_pct: perfCap,
       },
       warnings: [
         "CANONICAL: finds+utilized from dd_usddd_spend_ledger where spend_key like 'dig:%'.",
         "CANONICAL: value distributed (USD) from dd_box_ledger claim_reserve × price_usd_at_dig.",
+        "MODEL: accrual potential = efficiency × scaling; performance = current vs previous efficiency.",
       ],
     };
 
