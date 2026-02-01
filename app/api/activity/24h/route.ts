@@ -52,7 +52,7 @@ function buildSafePayload(
       terminal_users: 0,
     },
     money: {
-      claims_value_usd: 0, // keep from rollup until rewards ledger exists
+      claims_value_usd: 0, // canonical USD value distributed
       usddd_spent: 0,      // canonical spend
     },
     model: {
@@ -118,8 +118,7 @@ export async function GET() {
     }
 
     // ----------------------------
-    // CANONICAL: Find + Spend ledger
-    // Only trust spend_key like 'dig:%'
+    // CANONICAL: spend/finds ledger (ONLY dig:* rows)
     // ----------------------------
     const { data: spendRows, error: spendErr } = await supabase
       .from("dd_usddd_spend_ledger")
@@ -138,7 +137,6 @@ export async function GET() {
     const finds24h = (spendRows ?? []).length;
 
     // unique claimers = distinct terminal_user_id in canonical spend rows
-    // (computed in JS to avoid expensive SQL distinct)
     const uniq = new Set<string>();
     for (const r of spendRows ?? []) {
       const id = r?.terminal_user_id;
@@ -147,21 +145,28 @@ export async function GET() {
     const uniqueClaimers = uniq.size;
 
     // ----------------------------
-    // Value Distributed (USD)
-    // TEMP: keep from rollup (telemetry) until rewards ledger exists
+    // CANONICAL: Value Distributed (USD)
+    // From dd_box_ledger claim_reserve + price snapshot at dig time
     // ----------------------------
-    const { data: roll, error: rollErr } = await supabase
-      .from("stats_events_rollup_1m")
-      .select("reward_usd, bucket_minute")
-      .gte("bucket_minute", iso(start))
-      .lt("bucket_minute", iso(end));
+    const { data: reserveRows, error: reserveErr } = await supabase
+      .from("dd_box_ledger")
+      .select("amount, meta, created_at")
+      .eq("entry_type", "claim_reserve")
+      .gte("created_at", iso(start))
+      .lt("created_at", iso(end));
 
-    if (rollErr) throw rollErr;
+    if (reserveErr) throw reserveErr;
 
-    const rewardUsd = (roll ?? []).reduce(
-      (acc: number, r: any) => acc + Number(r?.reward_usd ?? 0),
-      0
-    );
+    const rewardUsd = (reserveRows ?? []).reduce((acc: number, r: any) => {
+      const amount = Number(r?.amount ?? 0);
+
+      // meta is jsonb; Supabase returns it as an object
+      const priceRaw = (r?.meta as any)?.price_usd_at_dig;
+      const price = Number(priceRaw ?? 0);
+
+      if (amount > 0 && price > 0) acc += amount * price;
+      return acc;
+    }, 0);
 
     // ----------------------------
     // LIGHT QUERIES (indexed)
@@ -203,9 +208,9 @@ export async function GET() {
       counts: {
         sessions_24h: sessionsRes.count ?? 0,
         protocol_actions: ledgerRes.count ?? 0,
-        claims_executed: finds24h,          // == Finds (24h)
-        claim_reserves: finds24h,           // reserve rows == finds rows (canonical dig)
-        unique_claimers: uniqueClaimers,    // distinct terminal_user_id
+        claims_executed: finds24h,       // == Finds (24h)
+        claim_reserves: finds24h,        // == reserve count (canonical)
+        unique_claimers: uniqueClaimers, // distinct terminal_user_id
         ledger_entries: ledgerRes.count ?? 0,
         golden_events: goldenRes.count ?? 0,
         terminal_users: usersRes.count ?? 0,
@@ -231,8 +236,8 @@ export async function GET() {
         network_performance_cap_pct: 99.98,
       },
       warnings: [
-        "CANONICAL: spend/finds derived from dd_usddd_spend_ledger where spend_key like 'dig:%'.",
-        "NOTE: Value Distributed (USD) still sourced from rollup until rewards ledger is added.",
+        "CANONICAL: finds+utilized from dd_usddd_spend_ledger where spend_key like 'dig:%'.",
+        "CANONICAL: value distributed (USD) from dd_box_ledger claim_reserve × price_usd_at_dig.",
       ],
     };
 
