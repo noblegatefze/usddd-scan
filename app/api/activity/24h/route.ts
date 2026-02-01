@@ -44,7 +44,7 @@ function buildSafePayload(
     counts: {
       sessions_24h: 0,
       protocol_actions: 0,
-      claims_executed: 0, // == Finds (24h)
+      claims_executed: 0,
       claim_reserves: 0,
       unique_claimers: 0,
       ledger_entries: 0,
@@ -52,8 +52,8 @@ function buildSafePayload(
       terminal_users: 0,
     },
     money: {
-      claims_value_usd: 0, // canonical USD value distributed
-      usddd_spent: 0, // canonical spend
+      claims_value_usd: 0,
+      usddd_spent: 0,
     },
     model: {
       reward_efficiency_usd_per_usddd: 0,
@@ -118,56 +118,39 @@ export async function GET() {
     }
 
     // ----------------------------
-    // CANONICAL: spend/finds ledger (ONLY dig:* rows)
+    // Canonical aggregates (fast): current + previous windows
     // ----------------------------
-    const { data: spendRows, error: spendErr } = await supabase
-      .from("dd_usddd_spend_ledger")
-      .select("usddd_amount, terminal_user_id, spend_key, created_at")
-      .like("spend_key", "dig:%")
-      .gte("created_at", iso(start))
-      .lt("created_at", iso(end));
+    const prevStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+    const prevEnd = start;
 
-    if (spendErr) throw spendErr;
+    const [{ data: curAgg, error: curAggErr }, { data: prevAgg, error: prevAggErr }] =
+      await Promise.all([
+        supabase.rpc("rpc_scan_activity_24h", {
+          p_start: iso(start),
+          p_end: iso(end),
+        }),
+        supabase.rpc("rpc_scan_activity_24h", {
+          p_start: iso(prevStart),
+          p_end: iso(prevEnd),
+        }),
+      ]);
 
-    const usdddSpent = (spendRows ?? []).reduce(
-      (acc: number, r: any) => acc + Number(r?.usddd_amount ?? 0),
-      0
-    );
+    if (curAggErr) throw curAggErr;
+    if (prevAggErr) throw prevAggErr;
 
-    const finds24h = (spendRows ?? []).length;
+    const cur: any = curAgg ?? {};
+    const prev: any = prevAgg ?? {};
 
-    // unique claimers = distinct terminal_user_id in canonical spend rows
-    const uniq = new Set<string>();
-    for (const r of spendRows ?? []) {
-      const id = r?.terminal_user_id;
-      if (id) uniq.add(String(id));
-    }
-    const uniqueClaimers = uniq.size;
+    const finds24h = Number(cur.finds_24h ?? 0);
+    const usdddSpent = Number(cur.usddd_spent_24h ?? 0);
+    const uniqueClaimers = Number(cur.unique_claimers_24h ?? 0);
+    const rewardUsd = Number(cur.value_distributed_usd_24h ?? 0);
 
-    // ----------------------------
-    // CANONICAL: Value Distributed (USD)
-    // From dd_box_ledger claim_reserve + price snapshot at dig time
-    // ----------------------------
-    const { data: reserveRows, error: reserveErr } = await supabase
-      .from("dd_box_ledger")
-      .select("amount, meta, created_at")
-      .eq("entry_type", "claim_reserve")
-      .gte("created_at", iso(start))
-      .lt("created_at", iso(end));
-
-    if (reserveErr) throw reserveErr;
-
-    const rewardUsd = (reserveRows ?? []).reduce((acc: number, r: any) => {
-      const amount = Number(r?.amount ?? 0);
-      const priceRaw = (r?.meta as any)?.price_usd_at_dig;
-      const price = Number(priceRaw ?? 0);
-
-      if (amount > 0 && price > 0) acc += amount * price;
-      return acc;
-    }, 0);
+    const prevUsdddSpent = Number(prev.usddd_spent_24h ?? 0);
+    const prevRewardUsd = Number(prev.value_distributed_usd_24h ?? 0);
 
     // ----------------------------
-    // MODEL: efficiency + accrual + previous window delta
+    // MODEL
     // ----------------------------
     const accrualScalingPct = 3;
     const accrualFloorPct = 10;
@@ -175,62 +158,18 @@ export async function GET() {
     const perfCap = 99.98;
 
     const rewardEfficiency = usdddSpent > 0 ? rewardUsd / usdddSpent : 0;
-
-    // previous window: [start-24h, start)
-    const prevStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
-    const prevEnd = start;
-
-    // prev canonical spend rows
-    const { data: prevSpendRows, error: prevSpendErr } = await supabase
-      .from("dd_usddd_spend_ledger")
-      .select("usddd_amount")
-      .like("spend_key", "dig:%")
-      .gte("created_at", iso(prevStart))
-      .lt("created_at", iso(prevEnd));
-
-    if (prevSpendErr) throw prevSpendErr;
-
-    const prevUsdddSpent = (prevSpendRows ?? []).reduce(
-      (acc: number, r: any) => acc + Number(r?.usddd_amount ?? 0),
-      0
-    );
-
-    // prev canonical reserves for USD distributed
-    const { data: prevReserveRows, error: prevReserveErr } = await supabase
-      .from("dd_box_ledger")
-      .select("amount, meta")
-      .eq("entry_type", "claim_reserve")
-      .gte("created_at", iso(prevStart))
-      .lt("created_at", iso(prevEnd));
-
-    if (prevReserveErr) throw prevReserveErr;
-
-    const prevRewardUsd = (prevReserveRows ?? []).reduce((acc: number, r: any) => {
-      const amount = Number(r?.amount ?? 0);
-      const priceRaw = (r?.meta as any)?.price_usd_at_dig;
-      const price = Number(priceRaw ?? 0);
-
-      if (amount > 0 && price > 0) acc += amount * price;
-      return acc;
-    }, 0);
-
     const prevRewardEfficiency =
       prevUsdddSpent > 0 ? prevRewardUsd / prevUsdddSpent : 0;
 
     const efficiencyDelta = rewardEfficiency - prevRewardEfficiency;
 
-    // performance: current vs previous (0..cap)
     let networkPerformancePct = 0;
     if (prevRewardEfficiency > 0 && rewardEfficiency >= 0) {
       const ratio = (rewardEfficiency / prevRewardEfficiency) * 100;
       networkPerformancePct = Math.max(0, Math.min(ratio, perfCap));
     }
 
-    // accrual potential = efficiency × scaling (%)
     const accrualPotentialPct = rewardEfficiency * accrualScalingPct;
-
-    // applied accrual = clamp( potential, floor, cap )
-    // (kept as a policy value; potential is observational)
     const appliedAccrualPct = Math.max(
       accrualFloorPct,
       Math.min(accrualPotentialPct, accrualCapPct)
@@ -267,7 +206,7 @@ export async function GET() {
 
     const payload: any = {
       ok: true,
-      mode: "canonical_dig_ledger",
+      mode: "canonical_rpc_agg",
       window: {
         start: start.toISOString(),
         end: end.toISOString(),
@@ -276,9 +215,9 @@ export async function GET() {
       counts: {
         sessions_24h: sessionsRes.count ?? 0,
         protocol_actions: ledgerRes.count ?? 0,
-        claims_executed: finds24h, // == Finds (24h)
-        claim_reserves: finds24h, // == reserve count (canonical)
-        unique_claimers: uniqueClaimers, // distinct terminal_user_id
+        claims_executed: finds24h,
+        claim_reserves: finds24h,
+        unique_claimers: uniqueClaimers,
         ledger_entries: ledgerRes.count ?? 0,
         golden_events: goldenRes.count ?? 0,
         terminal_users: usersRes.count ?? 0,
@@ -302,9 +241,7 @@ export async function GET() {
         network_performance_cap_pct: perfCap,
       },
       warnings: [
-        "CANONICAL: finds+utilized from dd_usddd_spend_ledger where spend_key like 'dig:%'.",
-        "CANONICAL: value distributed (USD) from dd_box_ledger claim_reserve × price_usd_at_dig.",
-        "MODEL: accrual potential = efficiency × scaling; performance = current vs previous efficiency.",
+        "CANONICAL: money+finds aggregated via rpc_scan_activity_24h (no large row scans).",
       ],
     };
 
