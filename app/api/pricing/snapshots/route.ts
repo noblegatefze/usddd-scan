@@ -58,8 +58,13 @@ export async function POST(req: NextRequest) {
   try {
     // Protect the endpoint (cron only)
     const secret = env("SNAPSHOT_CRON_SECRET");
-    const got = req.headers.get("x-cron-secret");
+    const url = new URL(req.url);
+    const gotHeader = req.headers.get("x-cron-secret");
+    const gotQuery = url.searchParams.get("secret");
+    const got = gotHeader || gotQuery;
+
     if (got !== secret) {
+
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 

@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/pricing/snapshots?secret=snap_8f3c0d2a9a4b47e5b6f1c9a7e2d0", "schedule": "0 9 * * *" },
+    { "path": "/api/pricing/snapshots?secret=snap_8f3c0d2a9a4b47e5b6f1c9a7e2d0", "schedule": "0 21 * * *" }
+  ]
+}
