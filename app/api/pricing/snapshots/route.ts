@@ -47,9 +47,7 @@ async function fetchCmcUsdPricesById(ids: number[]): Promise<Map<number, number>
   for (const k of Object.keys(data)) {
     const id = Number(k);
     const price = Number(data?.[k]?.quote?.USD?.price);
-    if (Number.isFinite(id) && Number.isFinite(price) && price > 0) {
-      out.set(id, price);
-    }
+    if (Number.isFinite(id) && Number.isFinite(price) && price > 0) out.set(id, price);
   }
   return out;
 }
@@ -64,7 +62,6 @@ export async function POST(req: NextRequest) {
     const got = gotHeader || gotQuery;
 
     if (got !== secret) {
-
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
@@ -72,20 +69,21 @@ export async function POST(req: NextRequest) {
       auth: { persistSession: false },
     });
 
-    // Pull active boxes + their cmc_id from meta
+    // Pull active boxes + their cmc_id from meta (authoritative)
     const { data: boxes, error } = await supabase
       .from("dd_boxes")
-      .select("id, token_symbol, token_chain_id, meta, status")
+      .select("id, token_symbol, token_chain_id, token_address, meta, status")
       .eq("status", "ACTIVE");
 
     if (error) throw error;
 
     const rows = (boxes ?? [])
       .map((b: any) => {
-        const sym = String(b.token_symbol ?? "").trim().toUpperCase();
-        const chain = String(b.token_chain_id ?? "").trim().toUpperCase();
+        const token_symbol = String(b.token_symbol ?? "").trim().toUpperCase();
+        const chain_id = String(b.token_chain_id ?? "").trim().toUpperCase();
+        const token_address = String(b.token_address ?? "").trim(); // canonical key
         const cmc_id = asInt(b?.meta?.cmc_id ?? b?.meta?.["cmc_id"]);
-        return { box_id: b.id, token_symbol: sym, chain_id: chain, cmc_id };
+        return { box_id: b.id, token_symbol, chain_id, token_address, cmc_id };
       })
       .filter(r => r.token_symbol && r.chain_id);
 
@@ -93,16 +91,14 @@ export async function POST(req: NextRequest) {
     const ids = Array.from(new Set(withId.map(r => r.cmc_id!)));
 
     if (ids.length === 0) {
-      return NextResponse.json({ ok: true, inserted: 0, note: "no boxes with cmc_id" });
+      return NextResponse.json({ ok: true, inserted_symbol: 0, inserted_addr: 0, note: "no boxes with cmc_id" });
     }
 
-    // Batch fetch prices
     const priceMap = await fetchCmcUsdPricesById(ids);
-
     const asOf = new Date().toISOString();
 
-    // Build snapshot inserts (skip tokens with no cmc_id or no returned price)
-    const inserts = withId
+    // Build inserts (symbol table)
+    const insertsSymbol = withId
       .map(r => {
         const price = priceMap.get(r.cmc_id!);
         if (!price) return null;
@@ -116,28 +112,47 @@ export async function POST(req: NextRequest) {
       })
       .filter(Boolean) as any[];
 
-    if (inserts.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        inserted: 0,
-        note: "cmc returned no prices for ids",
-        ids_requested: ids.length,
-      });
+    // Build inserts (address table) — only when token_address exists
+    const insertsAddr = withId
+      .map(r => {
+        const price = priceMap.get(r.cmc_id!);
+        if (!price) return null;
+        if (!r.token_address) return null;
+        return {
+          chain_id: r.chain_id,
+          token_address: r.token_address,
+          price_usd: price,
+          source: "cmc",
+          as_of: asOf,
+        };
+      })
+      .filter(Boolean) as any[];
+
+    // Insert symbol snapshots (backwards compatible)
+    let inserted_symbol = 0;
+    if (insertsSymbol.length > 0) {
+      const { error: insErr } = await supabase.from("dd_token_price_snapshots").insert(insertsSymbol);
+      if (insErr) throw insErr;
+      inserted_symbol = insertsSymbol.length;
     }
 
-    const { error: insErr } = await supabase
-      .from("dd_token_price_snapshots")
-      .insert(inserts);
-
-    if (insErr) throw insErr;
+    // Insert address snapshots (canonical)
+    let inserted_addr = 0;
+    if (insertsAddr.length > 0) {
+      const { error: insErr2 } = await supabase.from("dd_token_price_snapshots_addr").insert(insertsAddr);
+      if (insErr2) throw insErr2;
+      inserted_addr = insertsAddr.length;
+    }
 
     return NextResponse.json({
       ok: true,
-      inserted: inserts.length,
       as_of: asOf,
       ids_requested: ids.length,
       ids_priced: priceMap.size,
+      inserted_symbol,
+      inserted_addr,
       skipped_no_cmc_id: rows.length - withId.length,
+      skipped_no_token_address: withId.filter(r => !r.token_address).length,
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
