@@ -223,7 +223,6 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   const netPerf = Number(model.network_performance_display_pct ?? model.network_performance_pct ?? 0) || 0;
   const effDelta = Number(model.efficiency_delta_usd_per_usddd ?? 0) || 0;
 
-  // subtle value styling (protocol tone)
   const perfTone =
     netPerf >= 80 ? "text-emerald-300" : netPerf >= 55 ? "text-slate-200" : "text-amber-300";
   const deltaTone = effDelta > 0 ? "text-emerald-300" : effDelta < 0 ? "text-amber-300" : "text-slate-200";
@@ -248,36 +247,13 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
   return (
     <div className="space-y-3">
-      {/* 3×3 on desktop, 2 columns on mobile */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
-        {/* Row 1 */}
-        <Tile
-          title="Protocol Actions (24h)"
-          desc="Total protocol operations processed."
-          value={fmt(c.protocol_actions ?? 0)}
-        />
-        <Tile
-          title="Sessions (24h)"
-          desc="Session starts recorded by the protocol."
-          value={fmt(c.sessions_24h ?? 0)}
-        />
-        <Tile
-          title="Claims Executed (24h)"
-          desc="Successful claim executions."
-          value={fmt(c.claims_executed ?? 0)}
-        />
+        <Tile title="Protocol Actions (24h)" desc="Total protocol operations processed." value={fmt(c.protocol_actions ?? 0)} />
+        <Tile title="Sessions (24h)" desc="Session starts recorded by the protocol." value={fmt(c.sessions_24h ?? 0)} />
+        <Tile title="Claims Executed (24h)" desc="Successful claim executions." value={fmt(c.claims_executed ?? 0)} />
 
-        {/* Row 2 */}
-        <Tile
-          title="USDDD Utilized (24h)"
-          desc="USDDD consumed by protocol activity."
-          value={fmtDec(m.usddd_spent ?? 0)}
-        />
-        <Tile
-          title="Value Distributed (24h)"
-          desc="USD value distributed by the protocol."
-          value={fmtUsd(m.claims_value_usd ?? 0)}
-        />
+        <Tile title="USDDD Utilized (24h)" desc="USDDD consumed by protocol activity." value={fmtDec(m.usddd_spent ?? 0)} />
+        <Tile title="Value Distributed (24h)" desc="USD value distributed by the protocol." value={fmtUsd(m.claims_value_usd ?? 0)} />
         <Tile
           title="Reward Efficiency (24h)"
           desc="USD value per 1 USDDD utilized."
@@ -288,18 +264,8 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
           }
         />
 
-        {/* Row 3 */}
-        <Tile
-          title="Accrual Potential"
-          desc="Derived from efficiency (× 3%)."
-          value={fmtPct2(accrualPotential)}
-        />
-        <Tile
-          title="Network Performance"
-          desc="Efficiency normalized to protocol scale."
-          value={fmtPct2(netPerf)}
-          valueClassName={perfTone}
-        />
+        <Tile title="Accrual Potential" desc="Derived from efficiency (× 3%)." value={fmtPct2(accrualPotential)} />
+        <Tile title="Network Performance" desc="Efficiency normalized to protocol scale." value={fmtPct2(netPerf)} valueClassName={perfTone} />
         <Tile
           title="Efficiency Delta (24h)"
           desc="Change vs previous 24h efficiency."
@@ -312,10 +278,8 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
         />
       </div>
 
-      {/* Footer row inside the card */}
       <div className="flex items-center justify-between gap-3 pt-1">
         <div className="text-[11px] text-slate-500">Accrual figures are protocol-defined and observational.</div>
-
         <button
           type="button"
           onClick={() => (window as any).__openScanModal?.("fund")}
@@ -326,7 +290,6 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
         </button>
       </div>
 
-      {/* Warnings (only show if non-empty messages) */}
       {data.warnings &&
         Array.isArray(data.warnings) &&
         data.warnings.some((w: any) => (w?.message ?? "").trim().length) && (
@@ -496,9 +459,7 @@ function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
             ) : (
               rows.map((r) => (
                 <tr key={r.box} className="border-b border-slate-800/40">
-                  <td className="py-2 pr-2 font-mono truncate text-slate-200">
-                    {r.box}
-                  </td>
+                  <td className="py-2 pr-2 font-mono truncate text-slate-200">{r.box}</td>
                   <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.deposited)}</td>
                   <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.claimed)}</td>
                   <td className="hidden md:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.withdrawn)}</td>
@@ -685,8 +646,10 @@ function fmtTs(ts: string | null | undefined) {
 
 function StatusPill({ status }: { status: PayoutInfo["status"] }) {
   const base = "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold";
-  if (status === "PAID") return <span className={`${base} border-emerald-500/30 bg-emerald-950/30 text-emerald-200`}>PAID</span>;
-  if (status === "PENDING") return <span className={`${base} border-amber-500/30 bg-amber-950/20 text-amber-200`}>PENDING</span>;
+  if (status === "PAID")
+    return <span className={`${base} border-emerald-500/30 bg-emerald-950/30 text-emerald-200`}>PAID</span>;
+  if (status === "PENDING")
+    return <span className={`${base} border-amber-500/30 bg-amber-950/20 text-amber-200`}>PENDING</span>;
   return <span className={`${base} border-slate-700 bg-slate-900/40 text-slate-300`}>UNCLAIMED</span>;
 }
 
@@ -760,24 +723,16 @@ function PayoutModalBody({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">From</div>
-          <div
-            className="mt-1 font-mono text-[13px] text-slate-200"
-            title={data.payout_from ?? ""}
-          >
+          <div className="mt-1 font-mono text-[13px] text-slate-200" title={data.payout_from ?? ""}>
             {maskAddr(data.payout_from)}
           </div>
-
         </div>
 
         <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
           <div className="text-[11px] uppercase tracking-wide text-slate-500">To</div>
-          <div
-            className="mt-1 font-mono text-[13px] text-slate-200"
-            title={data.payout_to ?? ""}
-          >
+          <div className="mt-1 font-mono text-[13px] text-slate-200" title={data.payout_to ?? ""}>
             {maskAddr(data.payout_to)}
           </div>
-
         </div>
       </div>
 
@@ -799,8 +754,9 @@ function PayoutModalBody({
           href={bscTx ?? "#"}
           target="_blank"
           rel="noreferrer"
-          className={`rounded-lg px-3 py-2 text-[12px] font-semibold ${bscTx ? "bg-slate-200 text-slate-950 hover:bg-white" : "bg-slate-800 text-slate-500 cursor-not-allowed"
-            }`}
+          className={`rounded-lg px-3 py-2 text-[12px] font-semibold ${
+            bscTx ? "bg-slate-200 text-slate-950 hover:bg-white" : "bg-slate-800 text-slate-500 cursor-not-allowed"
+          }`}
           aria-disabled={!bscTx}
           onClick={(e) => {
             if (!bscTx) e.preventDefault();
@@ -836,14 +792,28 @@ export default function Home() {
       if (!alive) return;
       setPaused(Boolean(flags?.pause_all));
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const [meta, setMeta] = React.useState<BuildMeta | null>(null);
 
-  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden" | "search" | "payout" | "airdrop";
+  type ModalKey =
+    | "fund"
+    | "sponsor"
+    | "boxes"
+    | "activity"
+    | "testnet"
+    | "golden"
+    | "search"
+    | "payout"
+    | "airdrop";
 
-  const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({ open: false, key: null });
+  const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({
+    open: false,
+    key: null,
+  });
 
   const openModal = (key: ModalKey) => setModal({ open: true, key });
   const closeModal = () => setModal({ open: false, key: null });
@@ -863,7 +833,6 @@ export default function Home() {
   const AIRDROP_TARGET = 10000;
   const AIRDROP_HOURS = 48;
 
-  // fixed start time per page load (good enough for the campaign window)
   const [airdropStartMs] = React.useState<number>(() => Date.now());
 
   const [airdropCount, setAirdropCount] = React.useState<number>(0);
@@ -871,6 +840,8 @@ export default function Home() {
   const [airdropAddr, setAirdropAddr] = React.useState<string>("");
   const [airdropMsg, setAirdropMsg] = React.useState<string | null>(null);
   const [airdropSubmitting, setAirdropSubmitting] = React.useState<boolean>(false);
+
+  const AIRDROP_COMPLETE = airdropCount >= AIRDROP_TARGET;
 
   React.useEffect(() => {
     if (!(modal.open && modal.key === "airdrop")) return;
@@ -928,7 +899,6 @@ export default function Home() {
       setAirdropMsg(json.already ? "Already registered. You’re in." : "Registered. You’re in.");
       setAirdropAddr("");
 
-      // refresh immediately
       const s = await fetch("/api/airdrop/stats?limit=30", { cache: "no-store" });
       const sj: any = await s.json();
       if (s.ok && sj?.ok) {
@@ -1058,25 +1028,21 @@ export default function Home() {
               >
                 Docs
               </a>
+
               <button
                 type="button"
                 onClick={() => openModal("airdrop")}
-                className="relative rounded-md border border-orange-400/60 bg-orange-950/25 px-2 py-1 text-[11px] font-semibold text-orange-100
-             hover:bg-orange-950/35"
+                className="relative rounded-md border border-orange-400/60 bg-orange-950/25 px-2 py-1 text-[11px] font-semibold text-orange-100 hover:bg-orange-950/35"
                 title="USDDD Airdrop"
               >
-                {/* outer glow pulse */}
                 <span className="pointer-events-none absolute -inset-1 rounded-md bg-orange-500/15 blur-sm animate-pulse" />
-                {/* subtle inner highlight */}
                 <span className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-orange-300/20" />
                 <span className="relative">USDDD Airdrop</span>
               </button>
-
             </div>
           </div>
         </div>
 
-        {/* Mobile search + pulse directly beneath (same line) */}
         <div className="md:hidden border-t border-slate-800/40 px-4 py-2">
           <div className="relative w-full">
             <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
@@ -1097,11 +1063,7 @@ export default function Home() {
         </div>
       </header>
 
-      <ScanModal
-        open={modal.open && modal.key === "payout"}
-        title="Phase Zero Golden Find Payout"
-        onClose={closeModal}
-      >
+      <ScanModal open={modal.open && modal.key === "payout"} title="Phase Zero Golden Find Payout" onClose={closeModal}>
         <PayoutModalBody claim={payoutClaim} terminalHref={LINKS.terminal} />
       </ScanModal>
 
@@ -1245,8 +1207,8 @@ export default function Home() {
       >
         <div className="space-y-3">
           <p>
-            This is a live protocol surface - not a directory. The fastest way to understand USDDD is to interact with it:
-            DIG, sponsor boxes, or fund the network.
+            This is a live protocol surface - not a directory. The fastest way to understand USDDD is to interact with it: DIG, sponsor boxes, or fund the
+            network.
           </p>
 
           <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
@@ -1292,17 +1254,25 @@ export default function Home() {
         </div>
       </ScanModal>
 
-      <ScanModal
-        open={modal.open && modal.key === "airdrop"}
-        title="USDDD Wallet Verification Drop"
-        onClose={closeModal}
-      >
+      <ScanModal open={modal.open && modal.key === "airdrop"} title="USDDD Wallet Verification Drop" onClose={closeModal}>
         <div className="space-y-3">
           <div className="rounded-lg border border-orange-500/30 bg-orange-950/15 p-3">
-            <div className="text-[12px] font-semibold text-orange-200">48h Verification Window</div>
+            <div className="text-[12px] font-semibold text-orange-200">
+              {AIRDROP_COMPLETE ? "Verification Complete" : "48h Verification Window"}
+            </div>
+
             <div className="mt-1 text-[12px] text-orange-100/80">
-              We’re resolving the Trust Wallet counterfeit warning by verifying the real USDDD + DIGDUG.DO relationship.
-              Add your wallet to be counted.
+              {AIRDROP_COMPLETE ? (
+                <>
+                  🎉 <span className="font-semibold">10,000 wallets verified.</span>
+                  <br />
+                  Trust Wallet verification requirements have been satisfied.
+                </>
+              ) : (
+                <>
+                  We’re resolving the Trust Wallet counterfeit warning by verifying the real USDDD + DIGDUG.DO relationship. Add your wallet to be counted.
+                </>
+              )}
             </div>
 
             <div className="mt-3 flex items-center justify-between gap-3">
@@ -1316,7 +1286,7 @@ export default function Home() {
               <div className="text-right">
                 <div className="text-[11px] text-slate-400">Closes in</div>
                 <div className="font-mono text-[13px] text-orange-200">
-                  {formatHMS(airdropRemainingMs())}
+                  {AIRDROP_COMPLETE ? "COMPLETED" : formatHMS(airdropRemainingMs())}
                 </div>
               </div>
             </div>
@@ -1343,27 +1313,65 @@ export default function Home() {
 
           <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
             <div className="text-[12px] font-semibold text-slate-200">Register your wallet</div>
-            <div className="mt-2 flex gap-2">
-              <input
-                value={airdropAddr}
-                onChange={(e) => setAirdropAddr(e.target.value)}
-                placeholder="0x... BEP-20 wallet address"
-                className="flex-1 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-orange-500/40"
-              />
-              <button
-                type="button"
-                onClick={submitAirdrop}
-                disabled={airdropSubmitting}
-                className="rounded-md border border-orange-500/40 bg-orange-950/20 px-3 py-2 text-[12px] font-semibold text-orange-200 hover:bg-orange-950/35 disabled:opacity-50"
-              >
-                {airdropSubmitting ? "Submitting…" : "Claim"}
-              </button>
-            </div>
+
+            {AIRDROP_COMPLETE ? (
+              <div className="mt-2 rounded-md border border-slate-800 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+                Wallet registration is closed.
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={airdropAddr}
+                  onChange={(e) => setAirdropAddr(e.target.value)}
+                  placeholder="0x... BEP-20 wallet address"
+                  className="flex-1 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-orange-500/40"
+                />
+                <button
+                  type="button"
+                  onClick={submitAirdrop}
+                  disabled={airdropSubmitting}
+                  className="rounded-md border border-orange-500/40 bg-orange-950/20 px-3 py-2 text-[12px] font-semibold text-orange-200 hover:bg-orange-950/35 disabled:opacity-50"
+                >
+                  {airdropSubmitting ? "Submitting…" : "Claim"}
+                </button>
+              </div>
+            )}
+
             {airdropMsg ? <div className="mt-2 text-[12px] text-slate-300">{airdropMsg}</div> : null}
+
             <div className="mt-2 text-[11px] text-slate-500">
-              This registers your wallet for verification. Final distribution may occur after the window closes or when the target is reached.
+              {AIRDROP_COMPLETE
+                ? "This verification window is complete. Follow and join Telegram for the next drop."
+                : "This registers your wallet for verification. Final distribution may occur after the window closes or when the target is reached."}
             </div>
           </div>
+
+          {/* ✅ CTA block (this was missing / mis-inserted) */}
+          {AIRDROP_COMPLETE && (
+            <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
+              <div className="font-semibold">What’s next</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-100/90">
+                <li>
+                  Follow{" "}
+                  <a
+                    href="https://x.com/toastpunk"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    @toastpunk
+                  </a>{" "}
+                  on X for the next drop.
+                </li>
+                <li>
+                  Join Telegram for Genesis updates and upcoming airdrops:{" "}
+                  <a href={LINKS.telegram} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                    t.me/digdugdo
+                  </a>
+                </li>
+              </ul>
+            </div>
+          )}
 
           <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
             <div className="flex items-center justify-between">
@@ -1492,4 +1500,3 @@ export default function Home() {
     </main>
   );
 }
-
