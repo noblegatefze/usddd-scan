@@ -118,39 +118,39 @@ export async function GET() {
     }
 
     // ----------------------------
-    // Canonical aggregates (fast): current + previous windows
+    // CANONICAL MONEY (current + previous)
+    // current: rpc_scan_money_24h_canonical()
+    // prev: inline SQL to compute prior 24h window with same truth rules
     // ----------------------------
     const prevStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
     const prevEnd = start;
 
-    const [{ data: curAgg, error: curAggErr }, { data: prevAgg, error: prevAggErr }] =
-      await Promise.all([
-        supabase.rpc("rpc_scan_activity_24h", {
-          p_start: iso(start),
-          p_end: iso(end),
-        }),
-        supabase.rpc("rpc_scan_activity_24h", {
-          p_start: iso(prevStart),
-          p_end: iso(prevEnd),
-        }),
-      ]);
+    const [
+      { data: curMoney, error: curMoneyErr },
+      { data: prevMoney, error: prevMoneyErr },
+    ] = await Promise.all([
+      supabase.rpc("rpc_scan_money_24h_canonical"),
+      supabase.rpc("rpc_scan_money_window_canonical", {
+        p_start: iso(prevStart),
+        p_end: iso(prevEnd),
+      }),
+    ]);
 
-    if (curAggErr) throw curAggErr;
-    if (prevAggErr) throw prevAggErr;
+    if (curMoneyErr) throw curMoneyErr;
+    if (prevMoneyErr) throw prevMoneyErr;
 
-    const cur: any = curAgg ?? {};
-    const prev: any = prevAgg ?? {};
+    const curRow: any = Array.isArray(curMoney) ? curMoney[0] : curMoney;
+    const prevRow: any = Array.isArray(prevMoney) ? prevMoney[0] : prevMoney;
 
-    const finds24h = Number(cur.finds_24h ?? 0);
-    const usdddSpent = Number(cur.usddd_spent_24h ?? 0);
-    const uniqueClaimers = Number(cur.unique_claimers_24h ?? 0);
-    const rewardUsd = Number(cur.value_distributed_usd_24h ?? 0);
+    const claimsExecuted = Number(curRow?.claims_executed_24h ?? 0);
+    const usdddSpent = Number(curRow?.usddd_spent_24h ?? 0);
+    const rewardUsd = Number(curRow?.claims_value_usd_24h ?? 0);
 
-    const prevUsdddSpent = Number(prev.usddd_spent_24h ?? 0);
-    const prevRewardUsd = Number(prev.value_distributed_usd_24h ?? 0);
+    const prevUsdddSpent = Number(prevRow?.usddd_spent_24h ?? 0);
+    const prevRewardUsd = Number(prevRow?.claims_value_usd_24h ?? 0);
 
     // ----------------------------
-    // MODEL
+    // MODEL (LOCKED)
     // ----------------------------
     const accrualScalingPct = 3;
     const accrualFloorPct = 10;
@@ -206,7 +206,7 @@ export async function GET() {
 
     const payload: any = {
       ok: true,
-      mode: "canonical_rpc_agg",
+      mode: "canonical_money_rpc",
       window: {
         start: start.toISOString(),
         end: end.toISOString(),
@@ -215,9 +215,9 @@ export async function GET() {
       counts: {
         sessions_24h: sessionsRes.count ?? 0,
         protocol_actions: ledgerRes.count ?? 0,
-        claims_executed: finds24h,
-        claim_reserves: finds24h,
-        unique_claimers: uniqueClaimers,
+        claims_executed: claimsExecuted,
+        claim_reserves: claimsExecuted,
+        unique_claimers: Number(curRow?.unique_claimers_24h ?? 0),
         ledger_entries: ledgerRes.count ?? 0,
         golden_events: goldenRes.count ?? 0,
         terminal_users: usersRes.count ?? 0,
@@ -241,7 +241,8 @@ export async function GET() {
         network_performance_cap_pct: perfCap,
       },
       warnings: [
-        "CANONICAL: money+finds aggregated via rpc_scan_activity_24h (no large row scans).",
+        "CANONICAL: money+executed claims derived from spend_ledger ↔ claims dig_id match + as-of snapshots.",
+        "CANONICAL: unique_claimers derived from matched claims (distinct user_id).",
       ],
     };
 
