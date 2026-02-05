@@ -841,7 +841,8 @@ export default function Home() {
 
   const [meta, setMeta] = React.useState<BuildMeta | null>(null);
 
-  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden" | "search" | "payout";
+  type ModalKey = "fund" | "sponsor" | "boxes" | "activity" | "testnet" | "golden" | "search" | "payout" | "airdrop";
+
   const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({ open: false, key: null });
 
   const openModal = (key: ModalKey) => setModal({ open: true, key });
@@ -858,10 +859,88 @@ export default function Home() {
 
   const [refreshTick, setRefreshTick] = React.useState(0);
 
+  // === USDDD Airdrop (Trust Wallet verification) ===
+  const AIRDROP_TARGET = 10000;
+  const AIRDROP_HOURS = 48;
+
+  // fixed start time per page load (good enough for the campaign window)
+  const [airdropStartMs] = React.useState<number>(() => Date.now());
+
+  const [airdropCount, setAirdropCount] = React.useState<number>(0);
+  const [airdropLatest, setAirdropLatest] = React.useState<string[]>([]);
+  const [airdropAddr, setAirdropAddr] = React.useState<string>("");
+  const [airdropMsg, setAirdropMsg] = React.useState<string | null>(null);
+  const [airdropSubmitting, setAirdropSubmitting] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (!(modal.open && modal.key === "airdrop")) return;
+
+    let alive = true;
+
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/airdrop/stats?limit=30", { cache: "no-store" });
+        const json: any = await res.json();
+        if (!alive) return;
+        if (res.ok && json?.ok) {
+          setAirdropCount(Number(json.count ?? 0));
+          setAirdropLatest(Array.isArray(json.latest) ? json.latest : []);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [modal.open, modal.key]);
+
   React.useEffect(() => {
     const t = setInterval(() => setRefreshTick((v) => v + 1), 60000);
     return () => clearInterval(t);
   }, []);
+
+  function airdropRemainingMs() {
+    const end = airdropStartMs + AIRDROP_HOURS * 3600 * 1000;
+    return Math.max(0, end - Date.now());
+  }
+
+  async function submitAirdrop() {
+    setAirdropMsg(null);
+    setAirdropSubmitting(true);
+    try {
+      const res = await fetch("/api/airdrop/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          address: airdropAddr,
+          source: "usddd_scan_modal",
+        }),
+      });
+
+      const json: any = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+
+      setAirdropMsg(json.already ? "Already registered. You’re in." : "Registered. You’re in.");
+      setAirdropAddr("");
+
+      // refresh immediately
+      const s = await fetch("/api/airdrop/stats?limit=30", { cache: "no-store" });
+      const sj: any = await s.json();
+      if (s.ok && sj?.ok) {
+        setAirdropCount(Number(sj.count ?? 0));
+        setAirdropLatest(Array.isArray(sj.latest) ? sj.latest : []);
+      }
+    } catch (e: any) {
+      setAirdropMsg(String(e?.message ?? e));
+    } finally {
+      setAirdropSubmitting(false);
+    }
+  }
 
   React.useEffect(() => {
     let cancelled = false;
@@ -979,6 +1058,20 @@ export default function Home() {
               >
                 Docs
               </a>
+              <button
+                type="button"
+                onClick={() => openModal("airdrop")}
+                className="relative rounded-md border border-orange-400/60 bg-orange-950/25 px-2 py-1 text-[11px] font-semibold text-orange-100
+             hover:bg-orange-950/35"
+                title="USDDD Airdrop"
+              >
+                {/* outer glow pulse */}
+                <span className="pointer-events-none absolute -inset-1 rounded-md bg-orange-500/15 blur-sm animate-pulse" />
+                {/* subtle inner highlight */}
+                <span className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-orange-300/20" />
+                <span className="relative">USDDD Airdrop</span>
+              </button>
+
             </div>
           </div>
         </div>
@@ -1195,6 +1288,98 @@ export default function Home() {
             >
               Join Telegram
             </a>
+          </div>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "airdrop"}
+        title="USDDD Wallet Verification Drop"
+        onClose={closeModal}
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg border border-orange-500/30 bg-orange-950/15 p-3">
+            <div className="text-[12px] font-semibold text-orange-200">48h Verification Window</div>
+            <div className="mt-1 text-[12px] text-orange-100/80">
+              We’re resolving the Trust Wallet counterfeit warning by verifying the real USDDD + DIGDUG.DO relationship.
+              Add your wallet to be counted.
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] text-slate-400">Wallets added</div>
+                <div className="text-xl font-extrabold text-slate-100 tabular-nums">
+                  {Math.min(airdropCount, AIRDROP_TARGET).toLocaleString()}{" "}
+                  <span className="text-slate-500 text-[12px]">/ {AIRDROP_TARGET.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] text-slate-400">Closes in</div>
+                <div className="font-mono text-[13px] text-orange-200">
+                  {formatHMS(airdropRemainingMs())}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 h-2 w-full rounded-full bg-slate-800/60 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-orange-400/70 transition-[width] duration-500"
+                style={{ width: `${Math.min(100, Math.floor((airdropCount / AIRDROP_TARGET) * 100))}%` }}
+              />
+            </div>
+
+            <div className="mt-2 text-[11px] text-slate-400">
+              Headline on X:{" "}
+              <a
+                href="https://x.com/toastpunk/status/2019182130228785177"
+                target="_blank"
+                rel="noreferrer"
+                className="text-orange-200 underline underline-offset-2 decoration-orange-500/40 hover:decoration-orange-500/80"
+              >
+                View post ↗
+              </a>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Register your wallet</div>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={airdropAddr}
+                onChange={(e) => setAirdropAddr(e.target.value)}
+                placeholder="0x... BEP-20 wallet address"
+                className="flex-1 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-orange-500/40"
+              />
+              <button
+                type="button"
+                onClick={submitAirdrop}
+                disabled={airdropSubmitting}
+                className="rounded-md border border-orange-500/40 bg-orange-950/20 px-3 py-2 text-[12px] font-semibold text-orange-200 hover:bg-orange-950/35 disabled:opacity-50"
+              >
+                {airdropSubmitting ? "Submitting…" : "Claim"}
+              </button>
+            </div>
+            {airdropMsg ? <div className="mt-2 text-[12px] text-slate-300">{airdropMsg}</div> : null}
+            <div className="mt-2 text-[11px] text-slate-500">
+              This registers your wallet for verification. Final distribution may occur after the window closes or when the target is reached.
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[12px] font-semibold text-slate-200">Live feed</div>
+              <div className="text-[11px] text-slate-500">refreshing every 1s</div>
+            </div>
+
+            <div className="mt-2 h-40 overflow-hidden rounded-md border border-slate-800 bg-slate-950/30">
+              <div className="h-full overflow-y-auto p-2 font-mono text-[12px] text-slate-300 space-y-1">
+                {airdropLatest.length ? (
+                  airdropLatest.map((w, i) => <div key={`${w}-${i}`}>{w}</div>)
+                ) : (
+                  <div className="text-slate-500">Waiting for wallets…</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </ScanModal>
