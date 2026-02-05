@@ -1257,7 +1257,11 @@ export default function Home() {
         </div>
       </ScanModal>
 
-      <ScanModal open={modal.open && modal.key === "airdrop"} title="USDDD Wallet Verification Drop" onClose={closeModal}>
+      <ScanModal
+        open={modal.open && modal.key === "airdrop"}
+        title="USDDD Wallet Verification Drop"
+        onClose={closeModal}
+      >
         <div className="space-y-3">
           <div className="rounded-lg border border-orange-500/30 bg-orange-950/15 p-3">
             <div className="text-[12px] font-semibold text-orange-200">
@@ -1273,7 +1277,8 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  We’re resolving the Trust Wallet counterfeit warning by verifying the real USDDD + DIGDUG.DO relationship. Add your wallet to be counted.
+                  We’re resolving the Trust Wallet counterfeit warning by verifying the real USDDD + DIGDUG.DO relationship.
+                  Add your wallet to be counted.
                 </>
               )}
             </div>
@@ -1349,7 +1354,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ✅ CTA block (this was missing / mis-inserted) */}
+          {/* ✅ CTA block */}
           {AIRDROP_COMPLETE && (
             <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
               <div className="font-semibold">What’s next</div>
@@ -1368,7 +1373,12 @@ export default function Home() {
                 </li>
                 <li>
                   Join Telegram for Genesis updates and upcoming airdrops:{" "}
-                  <a href={LINKS.telegram} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                  <a
+                    href={LINKS.telegram}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
                     t.me/digdugdo
                   </a>
                 </li>
@@ -1376,22 +1386,25 @@ export default function Home() {
             </div>
           )}
 
-          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[12px] font-semibold text-slate-200">Live feed</div>
-              <div className="text-[11px] text-slate-500">refreshing every 1s</div>
-            </div>
+          {/* ✅ Hide Live feed once complete to avoid nested scrollbars */}
+          {!AIRDROP_COMPLETE && (
+            <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[12px] font-semibold text-slate-200">Live feed</div>
+                <div className="text-[11px] text-slate-500">refreshing every 1s</div>
+              </div>
 
-            <div className="mt-2 h-40 overflow-hidden rounded-md border border-slate-800 bg-slate-950/30">
-              <div className="h-full overflow-y-auto p-2 font-mono text-[12px] text-slate-300 space-y-1">
-                {airdropLatest.length ? (
-                  airdropLatest.map((w, i) => <div key={`${w}-${i}`}>{w}</div>)
-                ) : (
-                  <div className="text-slate-500">Waiting for wallets…</div>
-                )}
+              <div className="mt-2 h-40 overflow-hidden rounded-md border border-slate-800 bg-slate-950/30">
+                <div className="h-full overflow-y-auto p-2 font-mono text-[12px] text-slate-300 space-y-1">
+                  {airdropLatest.length ? (
+                    airdropLatest.map((w, i) => <div key={`${w}-${i}`}>{w}</div>)
+                  ) : (
+                    <div className="text-slate-500">Waiting for wallets…</div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </ScanModal>
 
