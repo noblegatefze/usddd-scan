@@ -52,6 +52,10 @@ async function fetchCmcUsdPricesById(ids: number[]): Promise<Map<number, number>
   return out;
 }
 
+export async function GET(req: NextRequest) {
+  return POST(req);
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Protect the endpoint (cron only)
