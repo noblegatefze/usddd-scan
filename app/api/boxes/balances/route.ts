@@ -45,8 +45,13 @@ export async function GET(req: Request) {
   const frow: any = Array.isArray(flags) ? flags[0] : flags;
   if (frow && frow.pause_all) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
 
-  // 1) Boxes (ids + meta)
-  const { data: boxes, error: bErr } = await supabase.from(TABLE_BOXES).select("id, meta").limit(limit);
+  // 1) Boxes (ids + meta) ✅ newest -> oldest
+  const { data: boxes, error: bErr } = await supabase
+    .from(TABLE_BOXES)
+    .select("id, meta")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
   if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 });
 
   const typedBoxes = (boxes ?? []) as BoxRow[];
@@ -82,6 +87,7 @@ export async function GET(req: Request) {
     };
   }
 
+  // Rows preserve the ordered ids list (newest -> oldest)
   const rows = ids.map((id) => {
     const a = canonMap[String(id)];
     const meta = metaById[String(id)] ?? {};
@@ -90,7 +96,7 @@ export async function GET(req: Request) {
     const deposited = toNum(a?.deposited_total);
     const withdrawn = toNum(a?.withdrawn_total);
     const claimed = toNum(a?.claimed_unwithdrawn);
-    const remaining = toNum(a?.onchain_balance); // already computed canonically
+    const remaining = toNum(a?.onchain_balance);
 
     return {
       box: String(id),
