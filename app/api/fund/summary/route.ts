@@ -7,59 +7,49 @@ function env(name: string): string {
   return v.trim();
 }
 
-const ACTIVE_STATUSES = new Set(["funded_locked", "swept_locked"]);
+function isUuid(s: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+}
 
 export async function GET(req: Request) {
   try {
-    const supabaseUrl = env("SUPABASE_URL");
-    const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
-    const sb = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+    const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+      auth: { persistSession: false },
+    });
 
     // Maintenance gate (DB-authoritative)
     const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
     if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     const row: any = Array.isArray(flags) ? flags[0] : flags;
-    if (row && row.pause_all) {
-      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
-    }
-
+    if (row && row.pause_all) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
 
     const url = new URL(req.url);
-    const terminalUserId = (url.searchParams.get("terminal_user_id") || "").trim() || null;
+    const rawTuid = (url.searchParams.get("terminal_user_id") || "").trim();
+    const terminalUserId = rawTuid && isUuid(rawTuid) ? rawTuid : null;
 
-    // Pull statuses + amounts (we compute counts and sums consistently from one dataset)
-    const { data: rows, error } = await sb
-      .from("fund_positions")
-      .select("status,funded_usdt,terminal_user_id", { head: false });
+    const { data, error } = await sb.rpc("rpc_fund_summary_v1", {
+      p_terminal_user_id: terminalUserId,
+    });
 
     if (error) throw error;
 
-    const counts: Record<string, number> = {};
-    let totalFundedUsdt = 0;
-    let userFundedUsdt = 0;
+    const r: any = Array.isArray(data) ? data[0] : data;
+    const pending = Number(r?.pending_positions ?? 0);
+    const active = Number(r?.active_positions ?? 0);
 
-    for (const r of rows ?? []) {
-      const s = String((r as any).status ?? "unknown");
-      counts[s] = (counts[s] ?? 0) + 1;
+    const totalFundedUsdt = Number(r?.total_funded_usdt ?? 0);
+    const totalAllocatedUsddd = Number(r?.total_allocated_usddd ?? 0);
+    const totalAccruedUsddd = Number(r?.total_accrued_usddd ?? 0);
 
-      if (ACTIVE_STATUSES.has(s)) {
-        const v = Number((r as any).funded_usdt ?? 0);
-        if (Number.isFinite(v)) {
-          totalFundedUsdt += v;
-
-          if (terminalUserId) {
-            const tuid = String((r as any).terminal_user_id ?? "");
-            if (tuid === terminalUserId) userFundedUsdt += v;
-          }
+    const user = terminalUserId
+      ? {
+          terminal_user_id: terminalUserId,
+          positions: Number(r?.user_positions ?? 0),
+          total_funded_usdt: Number(r?.user_funded_usdt ?? 0),
+          total_allocated_usddd: Number(r?.user_allocated_usddd ?? 0),
+          total_accrued_usddd: Number(r?.user_accrued_usddd ?? 0),
         }
-      }
-    }
-
-    const pending = (counts["awaiting_funds"] ?? 0) + (counts["issued"] ?? 0);
-
-    const fundedLocked = counts["funded_locked"] ?? 0;
-    const sweptLocked = counts["swept_locked"] ?? 0;
-    const active = fundedLocked + sweptLocked;
+      : null;
 
     return NextResponse.json({
       ok: true,
@@ -68,27 +58,25 @@ export async function GET(req: Request) {
       pending_positions: pending,
       active_positions: active,
       total_funded_usdt: totalFundedUsdt,
-      counts_by_status: counts,
 
-      // Structured sections for later UI cleanup / operator panels
+      // New truth keys (safe to add)
+      total_allocated_usddd: totalAllocatedUsddd,
+      total_accrued_usddd: totalAccruedUsddd,
+      total_with_accrual_usddd: totalAllocatedUsddd + totalAccruedUsddd,
+
       global: {
         pending_positions: pending,
         active_positions: active,
         total_funded_usdt: totalFundedUsdt,
-        counts_by_status: counts,
-        active_statuses: Array.from(ACTIVE_STATUSES),
+        total_allocated_usddd: totalAllocatedUsddd,
+        total_accrued_usddd: totalAccruedUsddd,
+        total_with_accrual_usddd: totalAllocatedUsddd + totalAccruedUsddd,
       },
 
-      user: terminalUserId
-        ? {
-            terminal_user_id: terminalUserId,
-            total_funded_usdt: userFundedUsdt,
-            active_statuses: Array.from(ACTIVE_STATUSES),
-          }
-        : null,
+      user,
 
       note:
-        "Fund Network summary (Scan). Active positions = funded_locked + swept_locked. Add ?terminal_user_id=... for per-user totals.",
+        "Fund Network summary (Scan). Active = funded_locked + swept_locked. Accrued is stored truth (usddd_accrued_display). Add ?terminal_user_id=<uuid> for per-user totals.",
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "summary failed" }, { status: 400 });

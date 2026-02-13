@@ -285,6 +285,9 @@ export default function FundNetworkPage() {
     pending_positions: number;
     active_positions: number;
     total_funded_usdt: number;
+    total_allocated_usddd: number;
+    total_accrued_usddd: number;
+    total_with_accrual_usddd: number;
   } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>("");
@@ -323,8 +326,8 @@ export default function FundNetworkPage() {
       ? Math.abs(appliedAccrualPctRaw - floorPct) < 1e-9
         ? floorPct - 0.03
         : Math.abs(appliedAccrualPctRaw - capPct) < 1e-9
-        ? capPct - 0.04
-        : appliedAccrualPctRaw
+          ? capPct - 0.04
+          : appliedAccrualPctRaw
       : null;
 
   const rewardEff = typeof model.reward_efficiency_usd_per_usddd === "number" ? model.reward_efficiency_usd_per_usddd : null;
@@ -425,6 +428,9 @@ export default function FundNetworkPage() {
             pending_positions: Number(j.pending_positions ?? 0),
             active_positions: Number(j.active_positions ?? 0),
             total_funded_usdt: Number(j.total_funded_usdt ?? 0),
+            total_allocated_usddd: Number(j.total_allocated_usddd ?? 0),
+            total_accrued_usddd: Number(j.total_accrued_usddd ?? 0),
+            total_with_accrual_usddd: Number(j.total_with_accrual_usddd ?? 0),
           });
         }
       } catch {
@@ -510,6 +516,13 @@ export default function FundNetworkPage() {
   const yourTotalAllocated = useMemo(() => {
     return visibleDbPositions.reduce((acc, p) => {
       const v = Number(p.usddd_allocated ?? 0);
+      return Number.isFinite(v) ? acc + v : acc;
+    }, 0);
+  }, [visibleDbPositions]);
+
+  const yourTotalAccrued = useMemo(() => {
+    return visibleDbPositions.reduce((acc, p) => {
+      const v = Number(p.usddd_accrued_display ?? 0);
       return Number.isFinite(v) ? acc + v : acc;
     }, 0);
   }, [visibleDbPositions]);
@@ -1140,6 +1153,14 @@ export default function FundNetworkPage() {
                     <span className="text-slate-500">USDDD allocated (custodied)</span>
                     <span className="text-slate-200">{fmtNum(yourTotalAllocated)}</span>
                   </div>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-slate-500">USDDD accrued (truth)</span>
+                    <span className="text-slate-200">{fmtNum(yourTotalAccrued)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-slate-500">Total (allocated + accrued)</span>
+                    <span className="text-slate-200">{fmtNum(yourTotalAllocated + yourTotalAccrued)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -1163,6 +1184,14 @@ export default function FundNetworkPage() {
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="text-slate-500">Pending positions</span>
                         <span className="text-slate-200">{fundSummary.pending_positions}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="text-slate-500">Accrued (USDDD)</span>
+                        <span className="text-slate-200">{fmtNum(fundSummary.total_accrued_usddd)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="text-slate-500">Total (allocated + accrued)</span>
+                        <span className="text-slate-200">{fmtNum(fundSummary.total_with_accrual_usddd)}</span>
                       </div>
                     </div>
                   ) : (
