@@ -528,6 +528,36 @@ export default function FundNetworkPage() {
   }, [visibleDbPositions]);
 
   // ---- actions ----
+  function unlinkTerminalOnly() {
+    // Removes Terminal session link for this browser, keeps refs
+    saveSessionId("");
+    setSessionId("");
+    setBound(false);
+    setBindErr(null);
+
+    // Reset view state and re-hydrate by refs (or none)
+    setDbPositions([]);
+    void hydrateDbByRefsOrSession();
+  }
+
+  function fullResetLocalState() {
+    // Nukes all local Fund state in this browser
+    saveSessionId("");
+    saveRefs([]);
+    saveDismissedRefs([]);
+
+    setSessionId("");
+    setBound(false);
+    setBindErr(null);
+
+    setPositions([]);
+    setDbPositions([]);
+    setDismissedRefs([]);
+    setDismissModal({ open: false, ref: "" });
+
+    void hydrateDbByRefsOrSession();
+  }
+
   async function issueNewPosition() {
     if (!ack) return;
     setIssueErr(null);
@@ -771,7 +801,10 @@ export default function FundNetworkPage() {
                   Ref: <span className="font-mono text-slate-200">{confirmModal.ref}</span>
                 </div>
                 <div className="mt-1 text-[12px] text-slate-400">
-                  Tx: <span className="font-mono text-slate-200">{confirmModal.tx.slice(0, 10)}...{confirmModal.tx.slice(-6)}</span>
+                  Tx:{" "}
+                  <span className="font-mono text-slate-200">
+                    {confirmModal.tx.slice(0, 10)}...{confirmModal.tx.slice(-6)}
+                  </span>
                 </div>
               </div>
               <button
@@ -837,8 +870,8 @@ export default function FundNetworkPage() {
 
             <div className="mt-3 space-y-3 text-[12px] leading-relaxed text-slate-300">
               <p>
-                Fund Network provisions USDT (BEP-20) into the protocol funding layer. Each position issues a unique deposit address.
-                After you confirm by tx hash, the protocol verifies and allocates custodied USDDD to the position.
+                Fund Network provisions USDT (BEP-20) into the protocol funding layer. Each position issues a unique deposit address. After you confirm by tx hash, the protocol verifies and allocates
+                custodied USDDD to the position.
               </p>
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] font-semibold text-slate-200">Flow</div>
@@ -945,13 +978,34 @@ export default function FundNetworkPage() {
                         placeholder="Terminal session_id"
                         className="w-full md:w-[420px] rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-600"
                       />
+
                       <button
                         type="button"
                         onClick={bindToTerminal}
-                        disabled={binding}
+                        disabled={binding || bound}
                         className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70 disabled:opacity-60"
                       >
-                        {binding ? "Linking..." : bound ? "Linked" : "Link Terminal"}
+                        {binding ? "Linking..." : bound ? "Linked ✓" : "Link Terminal"}
+                      </button>
+
+                      {bound ? (
+                        <button
+                          type="button"
+                          onClick={unlinkTerminalOnly}
+                          className="rounded-md border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-[12px] text-amber-100 hover:bg-amber-950/50"
+                          title="Unlink this browser from the saved Terminal session_id"
+                        >
+                          Unlink
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={fullResetLocalState}
+                        className="rounded-md border border-red-900/60 bg-red-950/30 px-3 py-2 text-[12px] text-red-100 hover:bg-red-950/50"
+                        title="Clears session link + saved refs + dismissed refs for this browser"
+                      >
+                        Reset (Local)
                       </button>
 
                       <a
@@ -1257,17 +1311,11 @@ export default function FundNetworkPage() {
                             {p.issued_deposit_address.slice(0, 10)}...{p.issued_deposit_address.slice(-6)}
                           </td>
 
-                          <td className="py-2 pr-4 text-right">
-                            {Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "--"}
-                          </td>
+                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "--"}</td>
 
-                          <td className="py-2 pr-4">
-                            {p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">--</span>}
-                          </td>
+                          <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">--</span>}</td>
 
-                          <td className="py-2 pr-4">
-                            {p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">--</span>}
-                          </td>
+                          <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">--</span>}</td>
 
                           <td className="py-2 pr-4">
                             {p.gas_topup_tx_hash ? (
@@ -1280,9 +1328,7 @@ export default function FundNetworkPage() {
                             )}
                           </td>
 
-                          <td className="py-2 pr-4 text-right">
-                            {p.usddd_allocated == null ? "--" : Number(p.usddd_allocated).toFixed(2)}
-                          </td>
+                          <td className="py-2 pr-4 text-right">{p.usddd_allocated == null ? "--" : Number(p.usddd_allocated).toFixed(2)}</td>
 
                           <td className="py-2 pr-4 text-right">{total == null ? "--" : fmtDec(total, 4)}</td>
 
