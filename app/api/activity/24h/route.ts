@@ -25,22 +25,12 @@ function addNetworkPerformanceDisplay(data: any) {
   }
 }
 
-function buildSafePayload(
-  start: Date,
-  end: Date,
-  mode: string,
-  warning: string,
-  error?: string
-) {
+function buildSafePayload(start: Date, end: Date, mode: string, warning: string, error?: string) {
   const payload: any = {
     ok: true,
     mode,
     error: error ?? null,
-    window: {
-      start: start.toISOString(),
-      end: end.toISOString(),
-      hours: 24,
-    },
+    window: { start: start.toISOString(), end: end.toISOString(), hours: 24 },
     counts: {
       sessions_24h: 0,
       protocol_actions: 0,
@@ -51,10 +41,7 @@ function buildSafePayload(
       golden_events: 0,
       terminal_users: 0,
     },
-    money: {
-      claims_value_usd: 0,
-      usddd_spent: 0,
-    },
+    money: { claims_value_usd: 0, usddd_spent: 0 },
     model: {
       reward_efficiency_usd_per_usddd: 0,
       reward_efficiency_prev_usd_per_usddd: 0,
@@ -83,29 +70,19 @@ export async function GET() {
   // BUILD GUARD
   if (process.env.NEXT_PHASE === "phase-production-build") {
     return NextResponse.json(
-      buildSafePayload(
-        start,
-        end,
-        "build_guard",
-        "BUILD GUARD: skipped Supabase during build (activity_24h)"
-      ),
-      { status: 200 }
+      buildSafePayload(start, end, "build_guard", "BUILD GUARD: skipped Supabase during build (activity_24h)"),
+      { status: 200, headers: { "cache-control": "no-store" } }
     );
   }
 
   try {
-    const supabaseUrl =
-      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRole =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_SERVICE_ROLE;
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
 
     if (!supabaseUrl) throw new Error("SUPABASE_URL is required");
     if (!serviceRole) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required");
 
-    const supabase = createClient(supabaseUrl, serviceRole, {
-      auth: { persistSession: false },
-    });
+    const supabase = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
 
     // Maintenance gate
     const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
@@ -114,13 +91,12 @@ export async function GET() {
     const row: any = Array.isArray(flags) ? flags[0] : flags;
     const bypassPause = process.env.BYPASS_PAUSE === "1";
     if (row?.pause_all && !bypassPause) {
-      return NextResponse.json({ ok: false, paused: true }, { status: 503 });
+      return NextResponse.json({ ok: false, paused: true }, { status: 503, headers: { "cache-control": "no-store" } });
     }
 
     // ----------------------------
-    // CANONICAL MONEY (current + previous)
-    // current: rpc_scan_money_24h_canonical()
-    // prev: inline SQL to compute prior 24h window with same truth rules
+    // CANONICAL MONEY (WINDOWED)
+    // Use window RPC for CURRENT window (fast under timeout)
     // ----------------------------
     const prevStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
     const prevEnd = start;
@@ -129,7 +105,10 @@ export async function GET() {
       { data: curMoney, error: curMoneyErr },
       { data: prevMoney, error: prevMoneyErr },
     ] = await Promise.all([
-      supabase.rpc("rpc_scan_money_24h_canonical"),
+      supabase.rpc("rpc_scan_money_window_canonical", {
+        p_start: iso(start),
+        p_end: iso(end),
+      }),
       supabase.rpc("rpc_scan_money_window_canonical", {
         p_start: iso(prevStart),
         p_end: iso(prevEnd),
@@ -158,8 +137,7 @@ export async function GET() {
     const perfCap = 99.98;
 
     const rewardEfficiency = usdddSpent > 0 ? rewardUsd / usdddSpent : 0;
-    const prevRewardEfficiency =
-      prevUsdddSpent > 0 ? prevRewardUsd / prevUsdddSpent : 0;
+    const prevRewardEfficiency = prevUsdddSpent > 0 ? prevRewardUsd / prevUsdddSpent : 0;
 
     const efficiencyDelta = rewardEfficiency - prevRewardEfficiency;
 
@@ -170,13 +148,11 @@ export async function GET() {
     }
 
     const accrualPotentialPct = rewardEfficiency * accrualScalingPct;
-    const appliedAccrualPct = Math.max(
-      accrualFloorPct,
-      Math.min(accrualPotentialPct, accrualCapPct)
-    );
+    const appliedAccrualPct = Math.max(accrualFloorPct, Math.min(accrualPotentialPct, accrualCapPct));
 
     // ----------------------------
     // LIGHT QUERIES (indexed)
+    // Keep as-is; if any fail we’ll see it in logs.
     // ----------------------------
     const [sessionsRes, ledgerRes, goldenRes, usersRes] = await Promise.all([
       supabase
@@ -206,12 +182,8 @@ export async function GET() {
 
     const payload: any = {
       ok: true,
-      mode: "canonical_money_rpc",
-      window: {
-        start: start.toISOString(),
-        end: end.toISOString(),
-        hours: 24,
-      },
+      mode: "canonical_money_window_rpc",
+      window: { start: start.toISOString(), end: end.toISOString(), hours: 24 },
       counts: {
         sessions_24h: sessionsRes.count ?? 0,
         protocol_actions: ledgerRes.count ?? 0,
@@ -241,30 +213,19 @@ export async function GET() {
         network_performance_cap_pct: perfCap,
       },
       warnings: [
-        "CANONICAL: money+executed claims derived from spend_ledger ↔ claims dig_id match + as-of snapshots.",
-        "CANONICAL: unique_claimers derived from matched claims (distinct user_id).",
+        "CANONICAL: windowed money+executed claims derived from spend_ledger ↔ claims dig_id match within explicit start/end.",
       ],
     };
 
     addNetworkPerformanceDisplay(payload);
 
-    return NextResponse.json(payload, {
-      headers: {
-        "cache-control": "no-store",
-      },
-    });
+    return NextResponse.json(payload, { headers: { "cache-control": "no-store" } });
   } catch (e: any) {
     console.error("activity/24h FAILED", e);
 
     return NextResponse.json(
-      buildSafePayload(
-        start,
-        end,
-        "safe_fallback",
-        "SAFE FALLBACK: activity_24h failed",
-        e?.message ?? "unknown"
-      ),
-      { status: 200 }
+      buildSafePayload(start, end, "safe_fallback", "SAFE FALLBACK: activity_24h failed", e?.message ?? "unknown"),
+      { status: 200, headers: { "cache-control": "no-store" } }
     );
   }
 }
