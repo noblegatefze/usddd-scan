@@ -20,13 +20,15 @@ function addNetworkPerformanceDisplay(data: any) {
 
     const normalized = cap > 0 ? Math.max(0, Math.min(raw, cap)) / cap : 0;
     m.network_performance_display_pct = base + normalized * (100 - base);
-  } catch { }
+  } catch {
+    // never break endpoint
+  }
 }
 
-function safePayload(start: Date, end: Date) {
+function safePayload(start: Date, end: Date, mode = "safe_fallback", warning = "SAFE FALLBACK: activity_24h failed") {
   const payload: any = {
     ok: true,
-    mode: "safe_fallback",
+    mode,
     error: null,
     window: { start: start.toISOString(), end: end.toISOString(), hours: 24 },
     counts: {
@@ -52,7 +54,7 @@ function safePayload(start: Date, end: Date) {
       network_performance_pct: 0,
       network_performance_cap_pct: 99.98,
     },
-    warnings: ["SAFE FALLBACK: activity_24h failed"],
+    warnings: [warning],
   };
   addNetworkPerformanceDisplay(payload);
   return payload;
@@ -64,24 +66,28 @@ export async function GET() {
   const prevStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
   const prevEnd = start;
 
+  let stage = "init";
+
+  // BUILD GUARD
   if (process.env.NEXT_PHASE === "phase-production-build") {
-    const p = safePayload(start, end);
-    p.mode = "build_guard";
-    p.warnings = ["BUILD GUARD: skipped Supabase during build (activity_24h)"];
+    const p = safePayload(start, end, "build_guard", "BUILD GUARD: skipped Supabase during build (activity_24h)");
     return NextResponse.json(p, { status: 200, headers: { "cache-control": "no-store" } });
   }
 
   try {
+    stage = "env";
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
     if (!supabaseUrl) throw new Error("SUPABASE_URL is required");
     if (!serviceRole) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required");
 
+    stage = "client";
     const supabase = createClient(supabaseUrl, serviceRole, {
       auth: { persistSession: false },
     });
 
     // Maintenance gate
+    stage = "flags";
     const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
     if (flagsErr) throw flagsErr;
     const row: any = Array.isArray(flags) ? flags[0] : flags;
@@ -92,17 +98,19 @@ export async function GET() {
     // ----------------------------
     // MUST SUCCEED: CANONICAL MONEY (WINDOWED)
     // ----------------------------
+    stage = "money";
     const warnings: string[] = [];
-    const [{ data: curMoney, error: curErr }, { data: prevMoney, error: prevErr }] = await Promise.all([
+
+    const [
+      { data: curMoney, error: curErr },
+      { data: prevMoney, error: prevErr },
+    ] = await Promise.all([
       supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(start), p_end: iso(end) }),
-      supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(prevStart), p_end: iso(prevEnd) })
+      supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(prevStart), p_end: iso(prevEnd) }),
     ]);
 
     if (curErr) throw curErr;
-    if (prevErr) {
-      // prev is optional; do not fail endpoint
-      warnings.push(`BEST-EFFORT: prev window failed: ${String((prevErr as any)?.message ?? prevErr)}`);
-    }
+    if (prevErr) warnings.push(`BEST-EFFORT: prev window failed: ${String((prevErr as any)?.message ?? prevErr)}`);
 
     const curRow: any = Array.isArray(curMoney) ? curMoney[0] : curMoney;
     const prevRow: any = Array.isArray(prevMoney) ? prevMoney[0] : prevMoney;
@@ -115,6 +123,7 @@ export async function GET() {
     const prevUsdddSpent = Number(prevRow?.usddd_spent_24h ?? 0);
     const prevRewardUsd = Number(prevRow?.claims_value_usd_24h ?? 0);
 
+    // MODEL (LOCKED)
     const accrualScalingPct = 3;
     const accrualFloorPct = 10;
     const accrualCapPct = 25;
@@ -134,9 +143,9 @@ export async function GET() {
     const appliedAccrualPct = Math.max(accrualFloorPct, Math.min(accrualPotentialPct, accrualCapPct));
 
     // ----------------------------
-    // BEST-EFFORT COUNTS (do NOT throw)
-    // use "planned" to avoid heavy COUNT(*)
+    // BEST-EFFORT COUNTS (planned)
     // ----------------------------
+    stage = "counts";
     const settled = await Promise.allSettled([
       supabase.from("dd_sessions").select("session_id", { count: "planned", head: true }).gte("created_at", iso(start)).lt("created_at", iso(end)),
       supabase.from("dd_box_ledger").select("id", { count: "planned", head: true }).gte("created_at", iso(start)).lt("created_at", iso(end)),
@@ -162,6 +171,7 @@ export async function GET() {
     const goldenEvents24h = getPlanned(2, "golden_events");
     const terminalUsers24h = getPlanned(3, "terminal_users");
 
+    stage = "respond";
     const payload: any = {
       ok: true,
       mode: "canonical_money_window_rpc_best_effort_counts",
@@ -196,12 +206,11 @@ export async function GET() {
     };
 
     addNetworkPerformanceDisplay(payload);
-
     return NextResponse.json(payload, { headers: { "cache-control": "no-store" } });
   } catch (e: any) {
-    console.error("activity/24h FAILED", e);
+    console.error("activity/24h FAILED", stage, e);
     const p = safePayload(start, end);
-    p.error = e?.message ?? "unknown";
+    p.error = `${stage}: ${e?.message ?? "unknown"}`;
     return NextResponse.json(p, { status: 200, headers: { "cache-control": "no-store" } });
   }
 }
