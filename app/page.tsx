@@ -884,6 +884,8 @@ export default function Home() {
 
   // Network Activity window selector (1h / 6h / 24h)
   const [activityWindow, setActivityWindow] = React.useState<ActivityWindow>(1);
+  // Golden hour status (drives gold borders)
+  const [goldenActive, setGoldenActive] = React.useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -973,6 +975,30 @@ export default function Home() {
   React.useEffect(() => {
     const t = setInterval(() => setRefreshTick((v) => v + 1), 60000);
     return () => clearInterval(t);
+  }, []);
+
+  React.useEffect(() => {
+    let alive = true;
+
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/golden/window-status", { cache: "no-store" });
+        const json: any = await res.json().catch(() => null);
+        if (!alive) return;
+        if (res.ok && json?.ok) {
+          setGoldenActive(Boolean(json.active));
+        }
+      } catch {
+        if (alive) setGoldenActive(false);
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 10000); // every 10s
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
   }, []);
 
   function airdropRemainingMs() {
@@ -1507,7 +1533,14 @@ export default function Home() {
 
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-4 md:grid-cols-12">
-          <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+          <section
+            className={[
+              "md:col-span-6 rounded-xl bg-slate-950/30 p-4",
+              goldenActive
+                ? "border border-amber-500/50 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]"
+                : "border border-slate-800/60",
+            ].join(" ")}
+          >
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-slate-200">Network Activity</h2>
 
@@ -1516,7 +1549,7 @@ export default function Home() {
               </div>
             </div>
 
-            <NetworkActivityCard refreshTick={refreshTick} windowHours={activityWindow} />
+            <NetworkActivityCard refreshTick={refreshTick} windowHours={activityWindow} isGoldenHour={goldenActive} />
           </section>
 
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
