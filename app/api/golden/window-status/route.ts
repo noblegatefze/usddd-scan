@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "../../_lib/supabaseAdmin";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function env(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env: ${name}`);
+  return v;
+}
+
+const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+  auth: { persistSession: false },
+});
 
 function jsonNoStore(body: any, status = 200) {
   return new NextResponse(JSON.stringify(body), {
@@ -19,19 +29,24 @@ function jsonNoStore(body: any, status = 200) {
 
 export async function GET() {
   try {
+    // (optional) respect maintenance gate if you have it available
+    // If rpc_admin_flags exists in scan repo DB, uncomment:
+    // const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
+    // if (flagsErr) return jsonNoStore({ ok: false, error: flagsErr.message }, 500);
+    // const row: any = Array.isArray(flags) ? flags[0] : flags;
+    // if (row?.pause_all) return jsonNoStore({ ok: false, paused: true }, 503);
+
     // 1) Ensure today's windows exist (idempotent)
-    const { error: e1 } = await supabaseAdmin.rpc("rpc_golden_ensure_today_windows", {
+    const { error: e1 } = await supabase.rpc("rpc_golden_ensure_today_windows", {
       p_cap: 5,
       p_window_minutes: 60,
     });
-    if (e1) {
-      return jsonNoStore({ ok: false, error: `ensure_windows_failed: ${e1.message}` }, 500);
-    }
+    if (e1) return jsonNoStore({ ok: false, error: `ensure_windows_failed: ${e1.message}` }, 500);
 
     // 2) Detect if currently inside a window
     const nowIso = new Date().toISOString();
 
-    const { data, error: e2 } = await supabaseAdmin
+    const { data, error: e2 } = await supabase
       .from("dd_tg_golden_windows")
       .select("day, slot, opens_at, closes_at, claimed_event_id")
       .lte("opens_at", nowIso)
@@ -39,9 +54,7 @@ export async function GET() {
       .order("opens_at", { ascending: true })
       .limit(1);
 
-    if (e2) {
-      return jsonNoStore({ ok: false, error: `active_window_query_failed: ${e2.message}` }, 500);
-    }
+    if (e2) return jsonNoStore({ ok: false, error: `active_window_query_failed: ${e2.message}` }, 500);
 
     const row = Array.isArray(data) && data.length ? data[0] : null;
     const active = Boolean(row);
