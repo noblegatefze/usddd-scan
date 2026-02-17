@@ -20,7 +20,7 @@ function addNetworkPerformanceDisplay(data: any) {
 
     const normalized = cap > 0 ? Math.max(0, Math.min(raw, cap)) / cap : 0;
     m.network_performance_display_pct = base + normalized * (100 - base);
-  } catch {}
+  } catch { }
 }
 
 function safePayload(start: Date, end: Date) {
@@ -94,8 +94,8 @@ export async function GET() {
     // ----------------------------
     const warnings: string[] = [];
     const [{ data: curMoney, error: curErr }, { data: prevMoney, error: prevErr }] = await Promise.all([
-      supabase.rpc("rpc_scan_money_window_canonical", { p_start: iso(start), p_end: iso(end) }),
-      supabase.rpc("rpc_scan_money_window_canonical", { p_start: iso(prevStart), p_end: iso(prevEnd) }),
+      supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(start), p_end: iso(end) })
+      supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(prevStart), p_end: iso(prevEnd) })
     ]);
 
     if (curErr) throw curErr;
