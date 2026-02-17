@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const revalidate = 60;
+export const revalidate = 0;
 
 function iso(d: Date) {
   return d.toISOString();
@@ -80,7 +80,6 @@ export async function GET() {
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
 
-  // BUILD GUARD
   if (process.env.NEXT_PHASE === "phase-production-build") {
     return NextResponse.json(
       buildSafePayload(
@@ -108,7 +107,9 @@ export async function GET() {
     });
 
     // Maintenance gate
-    const { data: flags, error: flagsErr } = await supabase.rpc("rpc_admin_flags");
+    const { data: flags, error: flagsErr } =
+      await supabase.rpc("rpc_admin_flags");
+
     if (flagsErr) throw flagsErr;
 
     const row: any = Array.isArray(flags) ? flags[0] : flags;
@@ -117,92 +118,72 @@ export async function GET() {
       return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     }
 
-    // ----------------------------
-    // CANONICAL MONEY (current + previous)
-    // current: rpc_scan_money_24h_canonical()
-    // prev: inline SQL to compute prior 24h window with same truth rules
-    // ----------------------------
-    const prevStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
-    const prevEnd = start;
-
-    const [
-      { data: curMoney, error: curMoneyErr },
-      { data: prevMoney, error: prevMoneyErr },
-    ] = await Promise.all([
-      supabase.rpc("rpc_scan_money_24h_canonical"),
-      supabase.rpc("rpc_scan_money_window_canonical", {
-        p_start: iso(prevStart),
-        p_end: iso(prevEnd),
-      }),
-    ]);
+    // =============================
+    // CANONICAL MONEY (CURRENT ONLY)
+    // =============================
+    const { data: curMoney, error: curMoneyErr } =
+      await supabase.rpc("rpc_scan_money_24h_canonical");
 
     if (curMoneyErr) throw curMoneyErr;
-    if (prevMoneyErr) throw prevMoneyErr;
 
     const curRow: any = Array.isArray(curMoney) ? curMoney[0] : curMoney;
-    const prevRow: any = Array.isArray(prevMoney) ? prevMoney[0] : prevMoney;
 
     const claimsExecuted = Number(curRow?.claims_executed_24h ?? 0);
     const usdddSpent = Number(curRow?.usddd_spent_24h ?? 0);
     const rewardUsd = Number(curRow?.claims_value_usd_24h ?? 0);
 
-    const prevUsdddSpent = Number(prevRow?.usddd_spent_24h ?? 0);
-    const prevRewardUsd = Number(prevRow?.claims_value_usd_24h ?? 0);
-
-    // ----------------------------
-    // MODEL (LOCKED)
-    // ----------------------------
+    // =============================
+    // MODEL (same structure, no prev window scan)
+    // =============================
     const accrualScalingPct = 3;
     const accrualFloorPct = 10;
     const accrualCapPct = 25;
     const perfCap = 99.98;
 
-    const rewardEfficiency = usdddSpent > 0 ? rewardUsd / usdddSpent : 0;
-    const prevRewardEfficiency =
-      prevUsdddSpent > 0 ? prevRewardUsd / prevUsdddSpent : 0;
+    const rewardEfficiency =
+      usdddSpent > 0 ? rewardUsd / usdddSpent : 0;
 
-    const efficiencyDelta = rewardEfficiency - prevRewardEfficiency;
+    const prevRewardEfficiency = 0; // removed heavy prev-window scan
+    const efficiencyDelta = 0;
+    const networkPerformancePct = 0;
 
-    let networkPerformancePct = 0;
-    if (prevRewardEfficiency > 0 && rewardEfficiency >= 0) {
-      const ratio = (rewardEfficiency / prevRewardEfficiency) * 100;
-      networkPerformancePct = Math.max(0, Math.min(ratio, perfCap));
-    }
+    const accrualPotentialPct =
+      rewardEfficiency * accrualScalingPct;
 
-    const accrualPotentialPct = rewardEfficiency * accrualScalingPct;
     const appliedAccrualPct = Math.max(
       accrualFloorPct,
       Math.min(accrualPotentialPct, accrualCapPct)
     );
 
-    // ----------------------------
-    // LIGHT QUERIES (indexed)
-    // ----------------------------
-    const [sessionsRes, ledgerRes, goldenRes, usersRes] = await Promise.all([
-      supabase
-        .from("dd_sessions")
-        .select("session_id", { count: "exact", head: true })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
+    // =============================
+    // LIGHT INDEXED QUERIES
+    // =============================
+    const [sessionsRes, ledgerRes, goldenRes, usersRes] =
+      await Promise.all([
+        supabase
+          .from("dd_sessions")
+          .select("session_id", { count: "exact", head: true })
+          .gte("created_at", iso(start))
+          .lt("created_at", iso(end)),
 
-      supabase
-        .from("dd_box_ledger")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
+        supabase
+          .from("dd_box_ledger")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", iso(start))
+          .lt("created_at", iso(end)),
 
-      supabase
-        .from("dd_tg_golden_events")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
+        supabase
+          .from("dd_tg_golden_events")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", iso(start))
+          .lt("created_at", iso(end)),
 
-      supabase
-        .from("dd_terminal_users")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", iso(start))
-        .lt("created_at", iso(end)),
-    ]);
+        supabase
+          .from("dd_terminal_users")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", iso(start))
+          .lt("created_at", iso(end)),
+      ]);
 
     const payload: any = {
       ok: true,
@@ -242,16 +223,14 @@ export async function GET() {
       },
       warnings: [
         "CANONICAL: money+executed claims derived from spend_ledger ↔ claims dig_id match + as-of snapshots.",
-        "CANONICAL: unique_claimers derived from matched claims (distinct user_id).",
+        "OPTIMIZED: previous-window scan removed to prevent statement timeout.",
       ],
     };
 
     addNetworkPerformanceDisplay(payload);
 
     return NextResponse.json(payload, {
-      headers: {
-        "cache-control": "public, s-maxage=60, stale-while-revalidate=120",
-      },
+      headers: { "cache-control": "no-store" },
     });
   } catch (e: any) {
     console.error("activity/24h FAILED", e);
