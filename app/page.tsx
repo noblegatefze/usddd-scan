@@ -51,6 +51,45 @@ type BuildMeta = {
   deployed_at: string;
 };
 
+type ActivityWindow = 1 | 6 | 24;
+
+function ActivityWindowPills({
+  value,
+  onChange,
+  className = "",
+}: {
+  value: ActivityWindow;
+  onChange: (v: ActivityWindow) => void;
+  className?: string;
+}) {
+  const Pill = ({ v }: { v: ActivityWindow }) => {
+    const active = value === v;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(v)}
+        className={[
+          "rounded-md px-2 py-1 text-[11px] font-semibold transition",
+          active
+            ? "border border-amber-900/40 bg-amber-950/20 text-amber-200"
+            : "border border-slate-800 bg-slate-950/40 text-slate-300 hover:bg-slate-950/70",
+        ].join(" ")}
+        title={`View ${v}h`}
+      >
+        {v}h
+      </button>
+    );
+  };
+
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <Pill v={1} />
+      <Pill v={6} />
+      <Pill v={24} />
+    </div>
+  );
+}
+
 function fmt(n: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 }
@@ -168,7 +207,15 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
   );
 }
 
-function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
+function NetworkActivityCard({
+  refreshTick,
+  windowHours,
+  isGoldenHour = false,
+}: {
+  refreshTick: number;
+  windowHours: ActivityWindow;
+  isGoldenHour?: boolean;
+}) {
   const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -177,18 +224,22 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/activity/1h", { cache: "no-store" });
+        setErr(null);
+
+        const res = await fetch(`/api/activity/${windowHours}h`, { cache: "no-store" });
         const j: any = await res.json().catch(() => null);
         if (!res.ok) throw new Error(readJsonError(j, `HTTP ${res.status}`));
         if (!j?.ok) throw new Error(readJsonError(j, "bad_response"));
 
+        // Your activity endpoints return { ok, row } now.
         const row = j?.row ?? {};
 
+        // Normalize into the legacy card shape you already render against.
         const normalized = {
           ...j,
-          // legacy-compatible shape expected by your card render below
+          windowHours,
           counts: {
-            sessions_24h: Number(row.sessions ?? 0),
+            sessions: Number(row.sessions ?? 0),
             protocol_actions: Number(row.protocol_actions ?? 0),
             claims_executed: Number(row.claims_executed ?? 0),
             claim_reserves: Number(row.claims_executed ?? 0),
@@ -202,7 +253,6 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
             claims_value_usd: Number(row.claims_value_usd ?? 0),
           },
           model: {
-            // keep your existing model fields used by the tiles
             reward_efficiency_usd_per_usddd: Number(row.reward_efficiency ?? 0),
             reward_efficiency_prev_usd_per_usddd: 0,
             efficiency_delta_usd_per_usddd: 0,
@@ -223,13 +273,12 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
       } catch (e: unknown) {
         if (!cancelled) setErr(getErrMsg(e));
       }
-
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [refreshTick]);
+  }, [refreshTick, windowHours]);
 
   const fmtPct2 = (n: number) => `${(Number.isFinite(n) ? n : 0).toFixed(2)}%`;
   const fmtSigned = (n: number) => {
@@ -254,6 +303,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
     );
   }
 
+  const hours = data.windowHours as ActivityWindow;
   const c = data.counts ?? {};
   const m = data.money ?? { claims_value_usd: 0, usddd_spent: 0 };
   const model = data.model ?? {};
@@ -263,9 +313,13 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   const netPerf = Number(model.network_performance_display_pct ?? model.network_performance_pct ?? 0) || 0;
   const effDelta = Number(model.efficiency_delta_usd_per_usddd ?? 0) || 0;
 
-  const perfTone =
-    netPerf >= 80 ? "text-emerald-300" : netPerf >= 55 ? "text-slate-200" : "text-amber-300";
-  const deltaTone = effDelta > 0 ? "text-emerald-300" : effDelta < 0 ? "text-amber-300" : "text-slate-200";
+  const perfTone = netPerf >= 80 ? "text-emerald-300" : netPerf >= 55 ? "text-slate-200" : "text-amber-300";
+  const deltaTone =
+    effDelta > 0 ? "text-emerald-300" : effDelta < 0 ? "text-amber-300" : "text-slate-200";
+
+  const tileShell = isGoldenHour
+    ? "border border-amber-500/40 bg-amber-950/10"
+    : "border border-slate-800/60 bg-slate-950/40";
 
   const Tile = ({
     title,
@@ -278,7 +332,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
     value: React.ReactNode;
     valueClassName?: string;
   }) => (
-    <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+    <div className={`rounded-lg p-3 ${tileShell}`}>
       <div className="text-[12px] text-slate-200">{title}</div>
       <div className={`mt-1 text-base font-semibold ${valueClassName ?? ""}`}>{value}</div>
       <div className="mt-1 text-[11px] leading-snug text-slate-500">{desc}</div>
@@ -288,14 +342,14 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
-        <Tile title="Protocol Actions (24h)" desc="Total protocol operations processed." value={fmt(c.protocol_actions ?? 0)} />
-        <Tile title="Sessions (24h)" desc="Session starts recorded by the protocol." value={fmt(c.sessions_24h ?? 0)} />
-        <Tile title="Claims Executed (24h)" desc="Successful claim executions." value={fmt(c.claims_executed ?? 0)} />
+        <Tile title={`Protocol Actions (${hours}h)`} desc="Total protocol operations processed." value={fmt(c.protocol_actions ?? 0)} />
+        <Tile title={`Sessions (${hours}h)`} desc="Session starts recorded by the protocol." value={fmt(c.sessions ?? 0)} />
+        <Tile title={`Claims Executed (${hours}h)`} desc="Successful claim executions." value={fmt(c.claims_executed ?? 0)} />
 
-        <Tile title="USDDD Utilized (24h)" desc="USDDD consumed by protocol activity." value={fmtDec(m.usddd_spent ?? 0)} />
-        <Tile title="Value Distributed (24h)" desc="USD value distributed by the protocol." value={fmtUsd(m.claims_value_usd ?? 0)} />
+        <Tile title={`USDDD Utilized (${hours}h)`} desc="USDDD consumed by protocol activity." value={fmtDec(m.usddd_spent ?? 0)} />
+        <Tile title={`Value Distributed (${hours}h)`} desc="USD value distributed by the protocol." value={fmtUsd(m.claims_value_usd ?? 0)} />
         <Tile
-          title="Reward Efficiency (24h)"
+          title={`Reward Efficiency (${hours}h)`}
           desc="USD value per 1 USDDD utilized."
           value={
             <span>
@@ -307,8 +361,8 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
         <Tile title="Accrual Potential" desc="Derived from efficiency (× 3%)." value={fmtPct2(accrualPotential)} />
         <Tile title="Network Performance" desc="Efficiency normalized to protocol scale." value={fmtPct2(netPerf)} valueClassName={perfTone} />
         <Tile
-          title="Efficiency Delta (24h)"
-          desc="Change vs previous 24h efficiency."
+          title={`Efficiency Delta (${hours}h)`}
+          desc={`Change vs previous ${hours}h efficiency.`}
           value={
             <span>
               {fmtSigned(effDelta)} <span className="text-[12px] text-slate-400">$/USDDD</span>
@@ -827,6 +881,9 @@ function PayoutModalBody({
 
 export default function Home() {
   const [paused, setPaused] = useState(false);
+
+  // Network Activity window selector (1h / 6h / 24h)
+  const [activityWindow, setActivityWindow] = React.useState<ActivityWindow>(1);
 
   useEffect(() => {
     let alive = true;
@@ -1451,11 +1508,15 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-4 md:grid-cols-12">
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-200">Network Activity (1h)</h2>
-              <span className="text-[11px] text-slate-400">live</span>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-200">Network Activity</h2>
+
+              <div className="flex items-center gap-2">
+                <ActivityWindowPills value={activityWindow} onChange={setActivityWindow} />
+              </div>
             </div>
-            <NetworkActivityCard refreshTick={refreshTick} />
+
+            <NetworkActivityCard refreshTick={refreshTick} windowHours={activityWindow} />
           </section>
 
           <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
