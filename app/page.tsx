@@ -5,49 +5,20 @@ import React, { useEffect, useState } from "react";
 import { getPublicFlags } from "./lib/flags";
 import { ScanMaintenance } from "./_maintenance/ScanMaintenance";
 
-// =====================
-// TYPES
-// =====================
-
 type ActivityResp = {
-  ok?: boolean;
-  mode?: string;
-  error?: string | null;
-  window?: { start: string | null; end: string | null; hours: number };
-
+  window: { start: string; end: string; hours: number };
   counts: {
-    sessions_24h: number;
-    protocol_actions: number;
-    claims_executed: number;
-    claim_reserves: number;
+    claims: number;
     unique_claimers: number;
     ledger_entries: number;
-    golden_events: number;
-    terminal_users: number;
+    claim_reserves: number;
   };
-
-  money: {
+  money?: {
     claims_value_usd: number;
     usddd_spent: number;
   };
-
-  model: {
-    reward_efficiency_usd_per_usddd: number;
-    reward_efficiency_prev_usd_per_usddd: number;
-    efficiency_delta_usd_per_usddd: number;
-
-    accrual_scaling_pct: number;
-    accrual_floor_pct: number;
-    accrual_cap_pct: number;
-    accrual_potential_pct: number;
-    applied_accrual_pct: number;
-
-    network_performance_pct: number;
-    network_performance_cap_pct: number;
-    network_performance_display_pct?: number;
-  };
-
-  warnings?: any[];
+  warnings?: Array<{ scope: string; message: string }>;
+  schema_assumption?: { timestamp_column?: string };
 };
 
 type GoldenFindRow = {
@@ -79,10 +50,6 @@ type BuildMeta = {
   build: string;
   deployed_at: string;
 };
-
-// =====================
-// FORMATTERS
-// =====================
 
 function fmt(n: number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
@@ -157,10 +124,6 @@ function formatHMS(ms: number): string {
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-// =====================
-// GOLDEN PILLS
-// =====================
-
 function GoldenPulsePills({ className = "" }: { className?: string }) {
   const [goldenTxt, setGoldenTxt] = React.useState<string>("-");
   const [utcResetTxt, setUtcResetTxt] = React.useState<string>("-"); // avoid hydration mismatch
@@ -169,6 +132,7 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
     const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
     tick();
     const t = setInterval(tick, 60000);
+
     return () => clearInterval(t);
   }, []);
 
@@ -176,7 +140,7 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/golden/today", { cache: "no-store" });
+        const res = await fetch("/api/golden/today");
         const json: any = await res.json();
         if (!res.ok || !json?.ok) return;
         const count = Number(json?.count ?? 0);
@@ -204,84 +168,8 @@ function GoldenPulsePills({ className = "" }: { className?: string }) {
   );
 }
 
-// =====================
-// NETWORK ACTIVITY CARD (Snapshot 1h -> Legacy shape)
-// =====================
-
-function normalizeSnapshotToLegacy(json: any): ActivityResp {
-  const row = json?.row ?? {};
-
-  const sessions = Number(row.sessions ?? 0) || 0;
-  const actions = Number(row.protocol_actions ?? 0) || 0;
-  const claims = Number(row.claims_executed ?? 0) || 0;
-  const uniq = Number(row.unique_claimers ?? 0) || 0;
-  const golden = Number(row.golden_events ?? 0) || 0;
-  const users = Number(row.terminal_users ?? 0) || 0;
-
-  const usddd = Number(row.usddd_spent ?? 0) || 0;
-  const usd = Number(row.claims_value_usd ?? 0) || 0;
-
-  const rewardEff = Number(row.reward_efficiency ?? 0) || (usddd > 0 ? usd / usddd : 0);
-
-  const accrualScalingPct = 3;
-  const accrualFloorPct = 10;
-  const accrualCapPct = 25;
-  const perfCap = 99.98;
-
-  const accrualPotentialPct = rewardEff * accrualScalingPct;
-  const appliedAccrualPct = Math.max(accrualFloorPct, Math.min(accrualPotentialPct, accrualCapPct));
-
-  // display normalization (same as your earlier logic)
-  const base = 55.6;
-  const cap = perfCap;
-  const raw = 0;
-  const normalizedPerf = cap > 0 ? Math.max(0, Math.min(raw, cap)) / cap : 0;
-  const perfDisplay = base + normalizedPerf * (100 - base);
-
-  return {
-    ok: true,
-    mode: json?.mode ?? "snapshot_1h",
-    error: null,
-    window: {
-      start: row.window_start ?? null,
-      end: row.window_end ?? null,
-      hours: 1,
-    },
-    counts: {
-      sessions_24h: sessions,
-      protocol_actions: actions,
-      claims_executed: claims,
-      claim_reserves: claims,
-      unique_claimers: uniq,
-      ledger_entries: actions,
-      golden_events: golden,
-      terminal_users: users,
-    },
-    money: {
-      claims_value_usd: usd,
-      usddd_spent: usddd,
-    },
-    model: {
-      reward_efficiency_usd_per_usddd: rewardEff,
-      reward_efficiency_prev_usd_per_usddd: 0,
-      efficiency_delta_usd_per_usddd: 0,
-
-      accrual_scaling_pct: accrualScalingPct,
-      accrual_floor_pct: accrualFloorPct,
-      accrual_cap_pct: accrualCapPct,
-      accrual_potential_pct: accrualPotentialPct,
-      applied_accrual_pct: appliedAccrualPct,
-
-      network_performance_pct: 0,
-      network_performance_cap_pct: perfCap,
-      network_performance_display_pct: perfDisplay,
-    },
-    warnings: Array.isArray(row.warnings) ? row.warnings : [],
-  };
-}
-
 function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
-  const [data, setData] = React.useState<ActivityResp | null>(null);
+  const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -289,18 +177,53 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        setErr(null);
         const res = await fetch("/api/activity/1h", { cache: "no-store" });
         const j: any = await res.json().catch(() => null);
-
         if (!res.ok) throw new Error(readJsonError(j, `HTTP ${res.status}`));
         if (!j?.ok) throw new Error(readJsonError(j, "bad_response"));
 
-        const normalized = normalizeSnapshotToLegacy(j);
+        const row = j?.row ?? {};
+
+        const normalized = {
+          ...j,
+          // legacy-compatible shape expected by your card render below
+          counts: {
+            sessions_24h: Number(row.sessions ?? 0),
+            protocol_actions: Number(row.protocol_actions ?? 0),
+            claims_executed: Number(row.claims_executed ?? 0),
+            claim_reserves: Number(row.claims_executed ?? 0),
+            unique_claimers: Number(row.unique_claimers ?? 0),
+            ledger_entries: Number(row.protocol_actions ?? 0),
+            golden_events: Number(row.golden_events ?? 0),
+            terminal_users: Number(row.terminal_users ?? 0),
+          },
+          money: {
+            usddd_spent: Number(row.usddd_spent ?? 0),
+            claims_value_usd: Number(row.claims_value_usd ?? 0),
+          },
+          model: {
+            // keep your existing model fields used by the tiles
+            reward_efficiency_usd_per_usddd: Number(row.reward_efficiency ?? 0),
+            reward_efficiency_prev_usd_per_usddd: 0,
+            efficiency_delta_usd_per_usddd: 0,
+
+            accrual_scaling_pct: 3,
+            accrual_floor_pct: 10,
+            accrual_cap_pct: 25,
+            accrual_potential_pct: Number(row.reward_efficiency ?? 0) * 3,
+            applied_accrual_pct: Math.max(10, Math.min(Number(row.reward_efficiency ?? 0) * 3, 25)),
+
+            network_performance_pct: 0,
+            network_performance_cap_pct: 99.98,
+            network_performance_display_pct: 55.6,
+          },
+        };
+
         if (!cancelled) setData(normalized);
       } catch (e: unknown) {
         if (!cancelled) setErr(getErrMsg(e));
       }
+
     })();
 
     return () => {
@@ -331,9 +254,9 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
     );
   }
 
-  const c = data.counts ?? ({} as any);
+  const c = data.counts ?? {};
   const m = data.money ?? { claims_value_usd: 0, usddd_spent: 0 };
-  const model = data.model ?? ({} as any);
+  const model = data.model ?? {};
 
   const rewardEff = Number(model.reward_efficiency_usd_per_usddd ?? 0) || 0;
   const accrualPotential = Number(model.accrual_potential_pct ?? 0) || 0;
@@ -365,14 +288,14 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
-        <Tile title="Protocol Actions (1h)" desc="Total protocol operations processed." value={fmt(c.protocol_actions ?? 0)} />
-        <Tile title="Sessions (1h)" desc="Session starts recorded by the protocol." value={fmt(c.sessions_24h ?? 0)} />
-        <Tile title="Claims Executed (1h)" desc="Successful claim executions." value={fmt(c.claims_executed ?? 0)} />
+        <Tile title="Protocol Actions (24h)" desc="Total protocol operations processed." value={fmt(c.protocol_actions ?? 0)} />
+        <Tile title="Sessions (24h)" desc="Session starts recorded by the protocol." value={fmt(c.sessions_24h ?? 0)} />
+        <Tile title="Claims Executed (24h)" desc="Successful claim executions." value={fmt(c.claims_executed ?? 0)} />
 
-        <Tile title="USDDD Utilized (1h)" desc="USDDD consumed by protocol activity." value={fmtDec(m.usddd_spent ?? 0)} />
-        <Tile title="Value Distributed (1h)" desc="USD value distributed by the protocol." value={fmtUsd(m.claims_value_usd ?? 0)} />
+        <Tile title="USDDD Utilized (24h)" desc="USDDD consumed by protocol activity." value={fmtDec(m.usddd_spent ?? 0)} />
+        <Tile title="Value Distributed (24h)" desc="USD value distributed by the protocol." value={fmtUsd(m.claims_value_usd ?? 0)} />
         <Tile
-          title="Reward Efficiency (1h)"
+          title="Reward Efficiency (24h)"
           desc="USD value per 1 USDDD utilized."
           value={
             <span>
@@ -382,15 +305,10 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
         />
 
         <Tile title="Accrual Potential" desc="Derived from efficiency (× 3%)." value={fmtPct2(accrualPotential)} />
+        <Tile title="Network Performance" desc="Efficiency normalized to protocol scale." value={fmtPct2(netPerf)} valueClassName={perfTone} />
         <Tile
-          title="Network Performance"
-          desc="Efficiency normalized to protocol scale."
-          value={fmtPct2(netPerf)}
-          valueClassName={perfTone}
-        />
-        <Tile
-          title="Efficiency Delta"
-          desc="Change vs previous window efficiency."
+          title="Efficiency Delta (24h)"
+          desc="Change vs previous 24h efficiency."
           value={
             <span>
               {fmtSigned(effDelta)} <span className="text-[12px] text-slate-400">$/USDDD</span>
@@ -412,32 +330,25 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
         </button>
       </div>
 
-      {/* warnings: support either array of objects {scope,message} OR string[] */}
-      {Array.isArray(data.warnings) && data.warnings.length > 0 && (
-        <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
-          <div className="font-semibold text-amber-200/90">Warnings</div>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            {data.warnings.map((w: any, i: number) => {
-              if (typeof w === "string") return <li key={i}>{w}</li>;
-              const scope = String(w?.scope ?? "").trim();
-              const msg = String(w?.message ?? "").trim();
-              if (!msg) return null;
-              return (
-                <li key={i}>
-                  {scope ? <span className="text-amber-200/70">{scope}:</span> : null} {msg}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+      {data.warnings &&
+        Array.isArray(data.warnings) &&
+        data.warnings.some((w: any) => (w?.message ?? "").trim().length) && (
+          <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
+            <div className="font-semibold text-amber-200/90">Warnings</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {data.warnings
+                .filter((w: any) => (w?.message ?? "").trim().length)
+                .map((w: any, i: number) => (
+                  <li key={i}>
+                    <span className="text-amber-200/70">{w.scope}:</span> {w.message}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
     </div>
   );
 }
-
-// =====================
-// TABLES
-// =====================
 
 function LatestGoldenFindsTable({
   refreshTick,
@@ -454,7 +365,7 @@ function LatestGoldenFindsTable({
 
     (async () => {
       try {
-        const res = await fetch("/api/golden-finds/latest?limit=10", { cache: "no-store" });
+        const res = await fetch("/api/golden-finds/latest?limit=10");
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         const dataRows =
@@ -538,7 +449,7 @@ function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/boxes/balances?limit=10", { cache: "no-store" });
+        const res = await fetch("/api/boxes/balances?limit=10");
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         const dataRows =
@@ -616,7 +527,7 @@ function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/leaderboards/golden-winners?limit=5", { cache: "no-store" });
+        const res = await fetch("/api/leaderboards/golden-winners?limit=5");
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         const dataRows =
@@ -669,10 +580,6 @@ function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
   );
 }
 
-// =====================
-// MODAL + PAYOUT (unchanged)
-// =====================
-
 function ScanModal({
   open,
   title,
@@ -719,6 +626,7 @@ function ScanModal({
           </button>
         </div>
 
+        {/* Only the body scrolls */}
         <div className="mt-3 max-h-[70vh] overflow-y-auto text-[12px] leading-relaxed text-slate-300 pr-1">
           {children}
         </div>
@@ -745,6 +653,7 @@ function ScanModal({
       </div>
     </div>
   );
+
 }
 
 type PayoutInfo = {
@@ -788,7 +697,13 @@ function StatusPill({ status }: { status: PayoutInfo["status"] }) {
   return <span className={`${base} border-slate-700 bg-slate-900/40 text-slate-300`}>UNCLAIMED</span>;
 }
 
-function PayoutModalBody({ claim, terminalHref }: { claim: string | null; terminalHref: string }) {
+function PayoutModalBody({
+  claim,
+  terminalHref,
+}: {
+  claim: string | null;
+  terminalHref: string;
+}) {
   const [data, setData] = React.useState<PayoutInfo | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -800,7 +715,7 @@ function PayoutModalBody({ claim, terminalHref }: { claim: string | null; termin
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetch(`/api/golden-finds/payment?claim=${encodeURIComponent(claim)}`, { cache: "no-store" });
+        const res = await fetch(`/api/golden-finds/payment?claim=${encodeURIComponent(claim)}`);
         const json: any = await res.json();
         if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
         if (!cancelled) setData(json as PayoutInfo);
@@ -815,8 +730,14 @@ function PayoutModalBody({ claim, terminalHref }: { claim: string | null; termin
     };
   }, [claim]);
 
-  if (!claim) return <div className="text-[13px] text-slate-400">No claim selected.</div>;
-  if (loading && !data) return <div className="text-[13px] text-slate-400">Loading payout…</div>;
+  if (!claim) {
+    return <div className="text-[13px] text-slate-400">No claim selected.</div>;
+  }
+
+  if (loading && !data) {
+    return <div className="text-[13px] text-slate-400">Loading payout…</div>;
+  }
+
   if (err) {
     return (
       <div className="rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-[13px] text-red-200">
@@ -824,6 +745,7 @@ function PayoutModalBody({ claim, terminalHref }: { claim: string | null; termin
       </div>
     );
   }
+
   if (!data) return null;
 
   const tx = (data.paid_tx_hash ?? "").trim();
@@ -876,9 +798,8 @@ function PayoutModalBody({ claim, terminalHref }: { claim: string | null; termin
           href={bscTx ?? "#"}
           target="_blank"
           rel="noreferrer"
-          className={`rounded-lg px-3 py-2 text-[12px] font-semibold ${
-            bscTx ? "bg-slate-200 text-slate-950 hover:bg-white" : "bg-slate-800 text-slate-500 cursor-not-allowed"
-          }`}
+          className={`rounded-lg px-3 py-2 text-[12px] font-semibold ${bscTx ? "bg-slate-200 text-slate-950 hover:bg-white" : "bg-slate-800 text-slate-500 cursor-not-allowed"
+            }`}
           aria-disabled={!bscTx}
           onClick={(e) => {
             if (!bscTx) e.preventDefault();
@@ -903,10 +824,6 @@ function PayoutModalBody({ claim, terminalHref }: { claim: string | null; termin
     </div>
   );
 }
-
-// =====================
-// PAGE
-// =====================
 
 export default function Home() {
   const [paused, setPaused] = useState(false);
@@ -1043,7 +960,7 @@ export default function Home() {
 
     (async () => {
       try {
-        const res = await fetch("/api/meta/build", { cache: "no-store" });
+        const res = await fetch("/api/meta/build");
         const json: unknown = await res.json();
         if (!cancelled && json && typeof json === "object") {
           setMeta(json as BuildMeta);
@@ -1193,8 +1110,343 @@ export default function Home() {
         <PayoutModalBody claim={payoutClaim} terminalHref={LINKS.terminal} />
       </ScanModal>
 
-      {/* NOTE: remaining modals + sections unchanged from your file */}
-      {/* For brevity, the rest of your content remains the same. */}
+      <ScanModal
+        open={modal.open && modal.key === "testnet"}
+        title="Zero Phase Testnet"
+        onClose={closeModal}
+        primaryLabel="Join Telegram"
+        primaryHref={LINKS.telegram}
+      >
+        <div className="space-y-3">
+          <p>
+            You're viewing the public Zero Phase testnet. Real users are actively exercising the protocol while we monitor network activity,
+            tighten rules, and eliminate broken flows.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">What's real right now</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>Live network activity and telemetry on Scan.</li>
+              <li>Protocol actions and claim execution paths.</li>
+              <li>
+                <span className="font-semibold">Golden Finds</span> funded by protocol/sponsors.
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-slate-400">
+            Most rewards in testnet are mock for testing. Genesis Phase is the mainnet transition where reward rules become final and funding expands.
+          </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "fund"}
+        title="Fund Network"
+        onClose={closeModal}
+        primaryLabel="Fund Network"
+        primaryHref="https://usddd.digdug.do/fund"
+        primaryNewTab={false}
+      >
+        <div className="space-y-3">
+          <p>
+            Funding the network means you provision USDT (BEP-20) into the protocol's funding layer. In return, the protocol allocates custodied
+            USDDD tied to network performance and the current Accrual Reference.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Benefits</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>Dedicated deposit address per position (traceable and auditable).</li>
+              <li>Custodied USDDD allocation tracked and surfaced on Scan.</li>
+              <li>Accrual is protocol-defined and observable (no hidden calculations).</li>
+            </ul>
+          </div>
+
+          <p className="text-slate-400">
+            Withdrawals remain locked during Zero Phase while we harden the system. Genesis unlock rules will be announced in Docs and Telegram.
+          </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "sponsor"}
+        title="Become a Sponsor"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p className="text-slate-300">
+            Sponsor boxes deploy rewards to the network and surface publicly on Scan. Full sponsor guide coming next.
+          </p>
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            Terminal command: <span className="font-mono text-slate-200">create box</span>
+          </div>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "boxes"}
+        title="View all boxes"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p className="text-slate-300">
+            Box Balances live in the Terminal. Browse sponsor boxes and inventories in Terminal.
+          </p>
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            Terminal command: <span className="font-mono text-slate-200">dig</span> - choose{" "}
+            <span className="font-mono text-slate-200">Treasure (2)</span>
+          </div>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "golden"}
+        title="Golden Finds"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p>
+            Golden Finds are the network's limited daily wins - rare, time-based rewards that appear inside the DIG flow. When a Golden Find is hit,
+            it's recorded publicly here on Scan.
+          </p>
+
+          <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
+            <div className="text-[12px] font-semibold text-amber-200">How to hunt Golden Finds</div>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12px] text-amber-100/90">
+              <li>Open the Terminal.</li>
+              <li>
+                Type: <span className="font-mono text-amber-50">dig</span>
+              </li>
+              <li>Follow the prompts and watch for Golden activity.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            <div className="font-semibold text-slate-200">Where updates happen</div>
+            <div className="mt-1 text-slate-400">
+              Live drops, rules, and announcements are posted in Telegram as we tune the protocol through Zero Phase.
+            </div>
+          </div>
+
+          <p className="text-slate-400">
+            Tip: Golden Finds are capped daily (see 'Golden today' at the top). If you want to stay ahead of the wave, keep Scan open and join Telegram.
+          </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "search"}
+        title="Don't search. DIG."
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p>
+            This is a live protocol surface - not a directory. The fastest way to understand USDDD is to interact with it: DIG, sponsor boxes, or fund the
+            network.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Three ways to join the network</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>
+                <span className="font-semibold text-slate-200">DIG</span> for rewards in the Terminal.
+                <span className="ml-2 font-mono text-slate-200">dig</span>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-200">Sponsor</span> a box and deploy rewards publicly on Scan.
+                <span className="ml-2 font-mono text-slate-200">create box</span>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-200">Fund</span> the network and receive custodied USDDD allocation.
+                <span className="ml-2 text-slate-200">/fund</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
+            USDDD is by the people, for the people - transparency first. If you want to be early, join Telegram and help shape Genesis.
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            <a
+              href="https://usddd.digdug.do/fund"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+            >
+              Fund Network
+            </a>
+            <a
+              href={LINKS.telegram}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+            >
+              Join Telegram
+            </a>
+          </div>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "airdrop"}
+        title="USDDD Wallet Verification Drop"
+        onClose={closeModal}
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg border border-orange-500/30 bg-orange-950/15 p-3">
+            <div className="text-[12px] font-semibold text-orange-200">
+              {AIRDROP_COMPLETE ? "Verification Complete" : "48h Verification Window"}
+            </div>
+
+            <div className="mt-1 text-[12px] text-orange-100/80">
+              {AIRDROP_COMPLETE ? (
+                <>
+                  🎉 <span className="font-semibold">10,000 wallets verified.</span>
+                  <br />
+                  Trust Wallet verification requirements have been satisfied.
+                </>
+              ) : (
+                <>
+                  We’re resolving the Trust Wallet counterfeit warning by verifying the real USDDD + DIGDUG.DO relationship.
+                  Add your wallet to be counted.
+                </>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] text-slate-400">Wallets added</div>
+                <div className="text-xl font-extrabold text-slate-100 tabular-nums">
+                  {Math.min(airdropCount, AIRDROP_TARGET).toLocaleString()}{" "}
+                  <span className="text-slate-500 text-[12px]">/ {AIRDROP_TARGET.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] text-slate-400">Closes in</div>
+                <div className="font-mono text-[13px] text-orange-200">
+                  {AIRDROP_COMPLETE ? "COMPLETED" : formatHMS(airdropRemainingMs())}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 h-2 w-full rounded-full bg-slate-800/60 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-orange-400/70 transition-[width] duration-500"
+                style={{ width: `${Math.min(100, Math.floor((airdropCount / AIRDROP_TARGET) * 100))}%` }}
+              />
+            </div>
+
+            <div className="mt-2 text-[11px] text-slate-400">
+              Headline on X:{" "}
+              <a
+                href="https://x.com/toastpunk/status/2019182130228785177"
+                target="_blank"
+                rel="noreferrer"
+                className="text-orange-200 underline underline-offset-2 decoration-orange-500/40 hover:decoration-orange-500/80"
+              >
+                View post ↗
+              </a>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Register your wallet</div>
+
+            {AIRDROP_COMPLETE ? (
+              <div className="mt-2 rounded-md border border-slate-800 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+                Wallet registration is closed.
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={airdropAddr}
+                  onChange={(e) => setAirdropAddr(e.target.value)}
+                  placeholder="0x... BEP-20 wallet address"
+                  className="flex-1 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-orange-500/40"
+                />
+                <button
+                  type="button"
+                  onClick={submitAirdrop}
+                  disabled={airdropSubmitting}
+                  className="rounded-md border border-orange-500/40 bg-orange-950/20 px-3 py-2 text-[12px] font-semibold text-orange-200 hover:bg-orange-950/35 disabled:opacity-50"
+                >
+                  {airdropSubmitting ? "Submitting…" : "Claim"}
+                </button>
+              </div>
+            )}
+
+            {airdropMsg ? <div className="mt-2 text-[12px] text-slate-300">{airdropMsg}</div> : null}
+
+            <div className="mt-2 text-[11px] text-slate-500">
+              {AIRDROP_COMPLETE
+                ? "This verification window is complete. Follow and join Telegram for the next drop."
+                : "This registers your wallet for verification. Final distribution may occur after the window closes or when the target is reached."}
+            </div>
+          </div>
+
+          {/* ✅ CTA block */}
+          {AIRDROP_COMPLETE && (
+            <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
+              <div className="font-semibold">What’s next</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-100/90">
+                <li>
+                  Follow{" "}
+                  <a
+                    href="https://x.com/toastpunk"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    @toastpunk
+                  </a>{" "}
+                  on X for the next drop.
+                </li>
+                <li>
+                  Join Telegram for Genesis updates and upcoming airdrops:{" "}
+                  <a
+                    href={LINKS.telegram}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    t.me/digdugdo
+                  </a>
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {/* ✅ Hide Live feed once complete to avoid nested scrollbars */}
+          {!AIRDROP_COMPLETE && (
+            <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[12px] font-semibold text-slate-200">Live feed</div>
+                <div className="text-[11px] text-slate-500">refreshing every 1s</div>
+              </div>
+
+              <div className="mt-2 h-40 overflow-hidden rounded-md border border-slate-800 bg-slate-950/30">
+                <div className="h-full overflow-y-auto p-2 font-mono text-[12px] text-slate-300 space-y-1">
+                  {airdropLatest.length ? (
+                    airdropLatest.map((w, i) => <div key={`${w}-${i}`}>{w}</div>)
+                  ) : (
+                    <div className="text-slate-500">Waiting for wallets…</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScanModal>
 
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="grid gap-4 md:grid-cols-12">
@@ -1206,8 +1458,95 @@ export default function Home() {
             <NetworkActivityCard refreshTick={refreshTick} />
           </section>
 
-          {/* the rest of your sections/modals/components below are unchanged */}
-          {/* Keep your existing code from here down (LatestGoldenFindsTable, BoxBalances, Leaderboards, footer, etc.) */}
+          <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-200">Latest Golden Finds</h2>
+
+              <div className="flex items-center gap-2">
+                <div className="hidden md:flex">
+                  <GoldenPulsePills />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openModal("golden")}
+                  className="text-[11px] text-slate-400 hover:text-slate-200"
+                >
+                  View all
+                </button>
+              </div>
+            </div>
+
+            <LatestGoldenFindsTable refreshTick={refreshTick} onOpenPayout={openPayout} />
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="text-[12px] text-slate-400">Use the Terminal to DIG and earn rewards.</div>
+              <a
+                href={LINKS.terminal}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Open Terminal
+              </a>
+              <a
+                href={LINKS.telegram}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Join Telegram
+              </a>
+            </div>
+          </section>
+
+          <section className="md:col-span-8 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-200">Box Balances</h2>
+              <button
+                type="button"
+                onClick={() => openModal("boxes")}
+                className="text-[11px] text-slate-400 hover:text-slate-200"
+              >
+                View all
+              </button>
+            </div>
+
+            <BoxBalancesTable refreshTick={refreshTick} />
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
+              <button
+                type="button"
+                onClick={() => openModal("sponsor")}
+                className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Become a Sponsor
+              </button>
+              <a
+                href={LINKS.docs}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Sponsor Docs
+              </a>
+            </div>
+          </section>
+
+          <section className="md:col-span-4 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-200">Leaderboards</h2>
+              <span className="text-[11px] text-slate-400">tabs next</span>
+            </div>
+
+            <div className="space-y-2 text-[13px]">
+              <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+                <div className="text-slate-200">Golden winners</div>
+                <div className="mt-1 text-[12px] text-slate-400">Top by wins / USD</div>
+                <GoldenWinnersLeaderboard refreshTick={refreshTick} />
+              </div>
+            </div>
+          </section>
         </div>
 
         <footer className="mt-6 text-center text-[12px] text-slate-500">
