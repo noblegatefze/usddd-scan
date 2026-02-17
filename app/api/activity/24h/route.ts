@@ -94,7 +94,7 @@ export async function GET() {
     // ----------------------------
     const warnings: string[] = [];
     const [{ data: curMoney, error: curErr }, { data: prevMoney, error: prevErr }] = await Promise.all([
-      supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(start), p_end: iso(end) })
+      supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(start), p_end: iso(end) }),
       supabase.rpc("rpc_scan_money_window_canonical_api", { p_start: iso(prevStart), p_end: iso(prevEnd) })
     ]);
 
