@@ -177,7 +177,7 @@ function NetworkActivityCard({ refreshTick }: { refreshTick: number }) {
 
     (async () => {
       try {
-        const res = await fetch("/api/activity/24h");
+        const res = await fetch("/api/activity/1h", { cache: "no-store" });
         const json: unknown = await res.json();
         if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
         if (!cancelled) setData(json);
