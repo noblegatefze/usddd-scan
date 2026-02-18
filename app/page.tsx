@@ -239,15 +239,14 @@ function NetworkActivityCard({
         // Your activity endpoints return { ok, row } now.
         const row = j?.row ?? {};
         // ---- Network performance (derived, capped) ----
-        const floor = 10;
-        const cap = 25;
+        // ---- Network performance (derived from applied accrual, capped) ----
         const perfCap = 99.78;
+        const floorPerf: number = 10;
+        const capPerf: number = 25;
 
         const effNow = Number(j?.model?.reward_efficiency_usd_per_usddd ?? row.reward_efficiency ?? 0) || 0;
-        const appliedPerf = Math.max(floor, Math.min(effNow * 3, cap));
-
-        // cap and floor are constants (25 and 10), so no need for cap===floor guard
-        const perfRaw = ((appliedPerf - floor) / (cap - floor)) * 100;
+        const appliedPerf = Math.max(floorPerf, Math.min(effNow * 3, capPerf));
+        const perfRaw = ((appliedPerf - floorPerf) / (capPerf - floorPerf)) * 100;
         const perfPct = Math.max(0, Math.min(perfRaw, perfCap));
 
         // Normalize into the legacy card shape you already render against.
