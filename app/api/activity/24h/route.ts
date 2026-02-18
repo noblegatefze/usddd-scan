@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -19,8 +19,16 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-export async function GET() {
+function ms(v: any): number {
+  const t = Date.parse(String(v ?? ""));
+  return Number.isFinite(t) ? t : NaN;
+}
+
+export async function GET(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const wantRefresh = url.searchParams.get("refresh") === "1";
+
     const SUPABASE_URL =
       process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -35,8 +43,8 @@ export async function GET() {
       auth: { persistSession: false },
     });
 
-    // Snapshot row (truth for 24h)
-    const { data, error } = await sb
+    // 1) read current snapshot
+    let { data, error } = await sb
       .from("dd_activity_window_snapshot")
       .select("*")
       .eq("key", "activity_24h")
@@ -45,13 +53,36 @@ export async function GET() {
     if (error) return json({ ok: false, error: error.message }, 500);
     if (!data) return json({ ok: false, error: "no_snapshot" }, 404);
 
-    // -----------------------------
-    // Normalize into expected shape
-    // -----------------------------
+    // 2) refresh ONLY if explicitly requested AND stale
+    const STALE_AFTER_MS = 60_000; // 60s throttle
+    const asOfMs = ms((data as any).as_of);
+    const ageMs = Number.isFinite(asOfMs) ? Date.now() - asOfMs : Infinity;
+
+    let refreshed = false;
+
+    if (wantRefresh && ageMs > STALE_AFTER_MS) {
+      await sb.rpc("rpc_refresh_activity_window_snapshot", {
+        p_key: "activity_24h",
+        p_hours: 24,
+      });
+
+      const reread = await sb
+        .from("dd_activity_window_snapshot")
+        .select("*")
+        .eq("key", "activity_24h")
+        .maybeSingle();
+
+      if (!reread.error && reread.data) {
+        data = reread.data;
+        refreshed = true;
+      }
+    }
+
+    // 3) normalized + backward compat
     const rewardEff =
-      typeof data.reward_efficiency === "number"
-        ? data.reward_efficiency
-        : Number(data.reward_efficiency ?? 0);
+      typeof (data as any).reward_efficiency === "number"
+        ? (data as any).reward_efficiency
+        : Number((data as any).reward_efficiency ?? 0);
 
     const floorPct = 10;
     const capPct = 25;
@@ -59,13 +90,13 @@ export async function GET() {
 
     const normalized = {
       window: {
-        start: data.window_start,
-        end: data.window_end,
+        start: (data as any).window_start,
+        end: (data as any).window_end,
         hours: 24,
       },
       money: {
-        claims_value_usd: Number(data.claims_value_usd ?? 0),
-        usddd_spent: Number(data.usddd_spent ?? 0),
+        claims_value_usd: Number((data as any).claims_value_usd ?? 0),
+        usddd_spent: Number((data as any).usddd_spent ?? 0),
       },
       model: {
         reward_efficiency_usd_per_usddd: rewardEff,
@@ -75,14 +106,17 @@ export async function GET() {
       },
     };
 
-    // ✅ BACKWARD COMPAT: keep old envelope used elsewhere
-    // while also returning normalized fields for newer consumers.
     return json(
       {
         ok: true,
         mode: "snapshot_24h",
-        row: data, // legacy consumers
-        ...normalized, // newer consumers (Fund page expects these)
+        row: data,
+        ...normalized,
+        meta: {
+          refreshed,
+          requested_refresh: wantRefresh,
+          age_ms: Math.max(0, Math.trunc(ageMs)),
+        },
       },
       200
     );
