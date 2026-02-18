@@ -218,6 +218,7 @@ function NetworkActivityCard({
 }) {
   const [data, setData] = React.useState<any>(null);
   const [err, setErr] = React.useState<string | null>(null);
+  const lastWindowRef = React.useRef<ActivityWindow | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -226,7 +227,11 @@ function NetworkActivityCard({
       try {
         setErr(null);
 
-        const res = await fetch(`/api/activity/${windowHours}h`, { cache: "no-store" });
+        const wantRefresh = lastWindowRef.current !== windowHours;
+        lastWindowRef.current = windowHours;
+
+        const refresh = wantRefresh ? "?refresh=1" : "";
+        const res = await fetch(`/api/activity/${windowHours}h${refresh}`, { cache: "no-store" });
         const j: any = await res.json().catch(() => null);
         if (!res.ok) throw new Error(readJsonError(j, `HTTP ${res.status}`));
         if (!j?.ok) throw new Error(readJsonError(j, "bad_response"));
