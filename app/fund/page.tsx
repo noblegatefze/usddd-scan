@@ -343,7 +343,19 @@ export default function FundNetworkPage() {
     const principal = Number(p?.usddd_allocated ?? 0);
     if (!Number.isFinite(principal) || principal <= 0) return null;
 
-    const startMs = p?.swept_at ? Date.parse(String(p.swept_at)) : NaN;
+    // ✅ TRUTH FIRST: use DB accrued display when available
+    const accruedTruth = Number(p?.usddd_accrued_display ?? 0);
+    if (Number.isFinite(accruedTruth) && accruedTruth > 0) {
+      return principal + accruedTruth;
+    }
+
+    // Fallback: estimate only if DB value is missing (shouldn't happen, but safe)
+    const startMs = p?.usddd_accrual_started_at
+      ? Date.parse(String(p.usddd_accrual_started_at))
+      : p?.swept_at
+        ? Date.parse(String(p.swept_at))
+        : NaN;
+
     if (!Number.isFinite(startMs)) return principal;
     if (typeof appliedAccrualPct !== "number") return principal;
 
@@ -351,6 +363,7 @@ export default function FundNetworkPage() {
     const yearSec = 365 * 24 * 60 * 60;
     const yieldAmt = principal * (appliedAccrualPct / 100) * (elapsedSec / yearSec);
     const total = principal + yieldAmt;
+
     return Number.isFinite(total) ? total : principal;
   }
 
