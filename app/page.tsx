@@ -238,6 +238,15 @@ function NetworkActivityCard({
 
         // Your activity endpoints return { ok, row } now.
         const row = j?.row ?? {};
+        // ---- Network performance (derived, capped) ----
+        const floor = 10;
+        const cap = 25;
+        const perfCap = 99.78;
+
+        const effNow = Number(j?.model?.reward_efficiency_usd_per_usddd ?? row.reward_efficiency ?? 0) || 0;
+        const appliedPerf = Math.max(floor, Math.min(effNow * 3, cap));
+        const perfRaw = cap === floor ? 0 : ((appliedPerf - floor) / (cap - floor)) * 100;
+        const perfPct = Math.max(0, Math.min(perfRaw, perfCap));
 
         // Normalize into the legacy card shape you already render against.
         const normalized = {
@@ -268,9 +277,10 @@ function NetworkActivityCard({
             accrual_potential_pct: Number(row.reward_efficiency ?? 0) * 3,
             applied_accrual_pct: Math.max(10, Math.min(Number(row.reward_efficiency ?? 0) * 3, 25)),
 
-            network_performance_pct: 0,
-            network_performance_cap_pct: 99.98,
-            network_performance_display_pct: 55.6,
+            network_performance_cap_pct: perfCap,
+            network_performance_pct: perfPct,
+            network_performance_display_pct: perfPct,
+
           },
         };
 
