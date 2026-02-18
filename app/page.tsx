@@ -258,9 +258,9 @@ function NetworkActivityCard({
             claims_value_usd: Number(row.claims_value_usd ?? 0),
           },
           model: {
-            reward_efficiency_usd_per_usddd: Number(row.reward_efficiency ?? 0),
-            reward_efficiency_prev_usd_per_usddd: 0,
-            efficiency_delta_usd_per_usddd: 0,
+            reward_efficiency_usd_per_usddd: Number(j?.model?.reward_efficiency_usd_per_usddd ?? row.reward_efficiency ?? 0),
+            reward_efficiency_prev_usd_per_usddd: Number(j?.model?.reward_efficiency_prev_usd_per_usddd ?? 0),
+            efficiency_delta_usd_per_usddd: Number(j?.model?.efficiency_delta_usd_per_usddd ?? 0),
 
             accrual_scaling_pct: 3,
             accrual_floor_pct: 10,
