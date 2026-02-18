@@ -28,16 +28,14 @@ export async function GET() {
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.SUPABASE_SERVICE_ROLE;
 
-    if (!SUPABASE_URL)
-      return json({ ok: false, error: "missing_supabase_url" }, 500);
-
-    if (!SUPABASE_KEY)
-      return json({ ok: false, error: "missing_service_role" }, 500);
+    if (!SUPABASE_URL) return json({ ok: false, error: "missing_supabase_url" }, 500);
+    if (!SUPABASE_KEY) return json({ ok: false, error: "missing_service_role" }, 500);
 
     const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false },
     });
 
+    // Snapshot row (truth for 24h)
     const { data, error } = await sb
       .from("dd_activity_window_snapshot")
       .select("*")
@@ -50,7 +48,6 @@ export async function GET() {
     // -----------------------------
     // Normalize into expected shape
     // -----------------------------
-
     const rewardEff =
       typeof data.reward_efficiency === "number"
         ? data.reward_efficiency
@@ -58,35 +55,38 @@ export async function GET() {
 
     const floorPct = 10;
     const capPct = 25;
-
     const appliedAccrualPct = clamp(rewardEff * 3, floorPct, capPct);
 
+    const normalized = {
+      window: {
+        start: data.window_start,
+        end: data.window_end,
+        hours: 24,
+      },
+      money: {
+        claims_value_usd: Number(data.claims_value_usd ?? 0),
+        usddd_spent: Number(data.usddd_spent ?? 0),
+      },
+      model: {
+        reward_efficiency_usd_per_usddd: rewardEff,
+        accrual_floor_pct: floorPct,
+        accrual_cap_pct: capPct,
+        applied_accrual_pct: appliedAccrualPct,
+      },
+    };
+
+    // ✅ BACKWARD COMPAT: keep old envelope used elsewhere
+    // while also returning normalized fields for newer consumers.
     return json(
       {
-        window: {
-          start: data.window_start,
-          end: data.window_end,
-          hours: 24,
-        },
-
-        money: {
-          claims_value_usd: Number(data.claims_value_usd ?? 0),
-          usddd_spent: Number(data.usddd_spent ?? 0),
-        },
-
-        model: {
-          reward_efficiency_usd_per_usddd: rewardEff,
-          accrual_floor_pct: floorPct,
-          accrual_cap_pct: capPct,
-          applied_accrual_pct: appliedAccrualPct,
-        },
+        ok: true,
+        mode: "snapshot_24h",
+        row: data, // legacy consumers
+        ...normalized, // newer consumers (Fund page expects these)
       },
       200
     );
   } catch (e: any) {
-    return json(
-      { ok: false, error: String(e?.message ?? e) },
-      500
-    );
+    return json({ ok: false, error: String(e?.message ?? e) }, 500);
   }
 }
