@@ -245,7 +245,9 @@ function NetworkActivityCard({
 
         const effNow = Number(j?.model?.reward_efficiency_usd_per_usddd ?? row.reward_efficiency ?? 0) || 0;
         const appliedPerf = Math.max(floor, Math.min(effNow * 3, cap));
-        const perfRaw = cap === floor ? 0 : ((appliedPerf - floor) / (cap - floor)) * 100;
+
+        // cap and floor are constants (25 and 10), so no need for cap===floor guard
+        const perfRaw = ((appliedPerf - floor) / (cap - floor)) * 100;
         const perfPct = Math.max(0, Math.min(perfRaw, perfCap));
 
         // Normalize into the legacy card shape you already render against.
