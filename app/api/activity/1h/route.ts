@@ -1,42 +1,124 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function reqEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
+function json(body: any, status = 200) {
+  return new NextResponse(JSON.stringify(body), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
 }
 
-export async function GET() {
-  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
 
-  if (!SUPABASE_URL) return NextResponse.json({ ok: false, error: "missing_supabase_url" }, { status: 500 });
-  if (!SUPABASE_KEY) return NextResponse.json({ ok: false, error: "missing_service_role" }, { status: 500 });
+function ms(v: any): number {
+  const t = Date.parse(String(v ?? ""));
+  return Number.isFinite(t) ? t : NaN;
+}
 
-  const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+export async function GET(req: NextRequest) {
+  try {
+    const url = new URL(req.url);
+    const wantRefresh = url.searchParams.get("refresh") === "1";
 
-  const { data, error } = await sb
-    .from("dd_activity_window_snapshot")
-    .select("*")
-    .eq("key", "activity_1h")
-    .limit(1)
-    .maybeSingle();
+    const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE;
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500, headers: { "cache-control": "no-store" } });
+    if (!SUPABASE_URL) return json({ ok: false, error: "missing_supabase_url" }, 500);
+    if (!SUPABASE_KEY) return json({ ok: false, error: "missing_service_role" }, 500);
+
+    const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+
+    const KEY = "activity_1h";
+    const HOURS = 1;
+
+    // 1) read snapshot
+    let { data, error } = await sb
+      .from("dd_activity_window_snapshot")
+      .select("*")
+      .eq("key", KEY)
+      .maybeSingle();
+
+    if (error) return json({ ok: false, error: error.message }, 500);
+
+    if (!data) {
+      return json({ ok: true, mode: "empty_snapshot", row: null }, 200);
+    }
+
+    // 2) refresh ONLY if explicitly requested AND stale
+    const STALE_AFTER_MS = 60_000; // 60s throttle
+    const asOfMs = ms((data as any).as_of);
+    const ageMs = Number.isFinite(asOfMs) ? Date.now() - asOfMs : Infinity;
+
+    let refreshed = false;
+
+    if (wantRefresh && ageMs > STALE_AFTER_MS) {
+      await sb.rpc("rpc_refresh_activity_window_snapshot", { p_key: KEY, p_hours: HOURS });
+
+      const reread = await sb
+        .from("dd_activity_window_snapshot")
+        .select("*")
+        .eq("key", KEY)
+        .maybeSingle();
+
+      if (!reread.error && reread.data) {
+        data = reread.data;
+        refreshed = true;
+      }
+    }
+
+    // 3) normalize fields
+    const rewardEff =
+      typeof (data as any).reward_efficiency === "number"
+        ? (data as any).reward_efficiency
+        : Number((data as any).reward_efficiency ?? 0);
+
+    const floorPct = 10;
+    const capPct = 25;
+    const appliedAccrualPct = clamp(rewardEff * 3, floorPct, capPct);
+
+    const normalized = {
+      window: {
+        start: (data as any).window_start,
+        end: (data as any).window_end,
+        hours: HOURS,
+      },
+      money: {
+        claims_value_usd: Number((data as any).claims_value_usd ?? 0),
+        usddd_spent: Number((data as any).usddd_spent ?? 0),
+      },
+      model: {
+        reward_efficiency_usd_per_usddd: rewardEff,
+        accrual_floor_pct: floorPct,
+        accrual_cap_pct: capPct,
+        applied_accrual_pct: appliedAccrualPct,
+      },
+    };
+
+    // 4) backward compat + normalized
+    return json(
+      {
+        ok: true,
+        mode: "snapshot_1h",
+        row: data,
+        ...normalized,
+        meta: {
+          refreshed,
+          requested_refresh: wantRefresh,
+          age_ms: Math.max(0, Math.trunc(ageMs)),
+        },
+      },
+      200
+    );
+  } catch (e: any) {
+    return json({ ok: false, error: String(e?.message ?? e) }, 500);
   }
-
-  if (!data) {
-    return NextResponse.json({ ok: true, mode: "empty_snapshot", row: null }, { status: 200, headers: { "cache-control": "no-store" } });
-  }
-
-  return NextResponse.json(
-    { ok: true, mode: "snapshot_1h", row: data },
-    { status: 200, headers: { "cache-control": "no-store" } }
-  );
 }
