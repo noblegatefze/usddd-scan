@@ -888,7 +888,7 @@ export default function Home() {
   const [paused, setPaused] = useState(false);
 
   // Network Activity window selector (1h / 6h / 24h)
-  const [activityWindow, setActivityWindow] = React.useState<ActivityWindow>(1);
+  const [activityWindow, setActivityWindow] = React.useState<ActivityWindow>(24);
   // Golden hour status (drives gold borders)
   const [goldenActive, setGoldenActive] = React.useState(false);
 
