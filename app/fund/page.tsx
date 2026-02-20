@@ -612,6 +612,10 @@ export default function FundNetworkPage() {
     });
   }, [dbPositions, dismissedSet, hideAwaiting]);
 
+  const yourActivePositions = useMemo(() => {
+    return visibleDbPositions.filter((p) => String(p.status) !== "withdrawn").length;
+  }, [visibleDbPositions]);
+
   const anyWithdrawAvailable = useMemo(() => {
     return visibleDbPositions.some((p) => String(p.status) === "swept_locked" && p.locked === false);
   }, [visibleDbPositions]);
@@ -1583,8 +1587,13 @@ export default function FundNetworkPage() {
 
                 <div className="mt-2 grid gap-2">
                   <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-slate-500">Positions</span>
+                    <span className="text-slate-500">Positions (all)</span>
                     <span className="text-slate-200">{visibleDbPositions.length}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-slate-500">Active positions</span>
+                    <span className="text-slate-200">{yourActivePositions}</span>
                   </div>
 
                   <div className="flex items-center justify-between text-[12px]">
