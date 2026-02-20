@@ -1663,12 +1663,6 @@ export default function FundNetworkPage() {
                         <span className="text-slate-200">{fmtNum(fundSummary.total_with_accrual_usddd)}</span>
                       </div>
 
-                      <div className="mt-1 border-t border-slate-800/60 pt-2 text-[11px] text-slate-500">Finalized</div>
-
-                      <div className="flex items-center justify-between text-[12px]">
-                        <span className="text-slate-500">Withdrawn (this Terminal)</span>
-                        <span className="text-slate-200">{fmtNum(yourTotalWithdrawn)}</span>
-                      </div>
                     </div>
 
                   ) : (
