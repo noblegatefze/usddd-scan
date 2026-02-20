@@ -582,6 +582,7 @@ export default function FundNetworkPage() {
 
   const yourTotalAccrued = useMemo(() => {
     return visibleDbPositions.reduce((acc, p) => {
+      if (String(p.status) === "withdrawn") return acc; // finalized: stop counting accrual
       const v = Number(p.usddd_accrued_display ?? 0);
       return Number.isFinite(v) ? acc + v : acc;
     }, 0);
@@ -970,13 +971,12 @@ export default function FundNetworkPage() {
 
             {withdrawModal.message ? (
               <div
-                className={`mt-3 rounded-lg border p-3 text-[12px] ${
-                  withdrawModal.stage === "success"
-                    ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-200"
-                    : withdrawModal.stage === "error"
-                      ? "border-red-900/40 bg-red-950/20 text-red-200"
-                      : "border-slate-800/60 bg-slate-950/30 text-slate-200"
-                }`}
+                className={`mt-3 rounded-lg border p-3 text-[12px] ${withdrawModal.stage === "success"
+                  ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-200"
+                  : withdrawModal.stage === "error"
+                    ? "border-red-900/40 bg-red-950/20 text-red-200"
+                    : "border-slate-800/60 bg-slate-950/30 text-slate-200"
+                  }`}
               >
                 {withdrawModal.message}
               </div>
@@ -1509,6 +1509,7 @@ export default function FundNetworkPage() {
                     visibleDbPositions.map((p) => {
                       const stage = statusToStage(p.status, p.locked);
                       const total = computeAccruedTotalUsddd(p);
+                      const isWithdrawn = String(p.status) === "withdrawn";
                       const allocated = Number(p.usddd_allocated ?? 0);
                       const accrued = Number(p.usddd_accrued_display ?? 0);
                       const canWithdraw = String(p.status) === "swept_locked" && p.locked === false;
@@ -1570,7 +1571,11 @@ export default function FundNetworkPage() {
                                       ref: p.position_ref,
                                       allocated: Number.isFinite(allocated) ? allocated : 0,
                                       accrued: Number.isFinite(accrued) ? accrued : 0,
-                                      total: Number.isFinite(total ?? NaN) ? Number(total) : (Number.isFinite(allocated) ? allocated : 0) + (Number.isFinite(accrued) ? accrued : 0),
+                                      total:
+                                        Number.isFinite(total ?? NaN)
+                                          ? Number(total)
+                                          : (Number.isFinite(allocated) ? allocated : 0) +
+                                          (Number.isFinite(accrued) ? accrued : 0),
                                       to: "",
                                       sid: sessionIdRef.current.trim() || "",
                                       stage: "idle",
@@ -1582,16 +1587,20 @@ export default function FundNetworkPage() {
                                 >
                                   Withdraw
                                 </button>
+                              ) : isWithdrawn ? (
+                                <span className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+                                  Withdrawn
+                                </span>
                               ) : (
                                 <button
                                   type="button"
                                   disabled
                                   className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
-                                  title="Locked until admin unlock"
                                 >
                                   Locked
                                 </button>
                               )}
+
                             </div>
                           </td>
                         </tr>
