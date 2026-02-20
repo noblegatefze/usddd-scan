@@ -60,6 +60,9 @@ type DbPosition = {
   usddd_accrual_started_at?: string | null;
 
   terminal_user_id?: string | null;
+
+  // ✅ IMPORTANT: allow UI to reflect admin unlock
+  locked?: boolean | null;
 };
 
 const LINKS = {
@@ -221,11 +224,29 @@ function saveSessionId(v: string) {
   }
 }
 
-function statusToStage(status: string) {
+function isLikelyEvmAddress(s: string) {
+  const v = (s || "").trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(v)) return false;
+  if (v.toLowerCase() === "0x0000000000000000000000000000000000000000") return false;
+  return true;
+}
+
+function statusToStage(status: string, locked?: boolean | null) {
   const s = String(status || "");
+  const isUnlocked = locked === false;
+
   if (s === "awaiting_funds") return { title: "Awaiting", hint: "Send USDT (BEP-20) then confirm with tx hash." };
   if (s === "funded_locked") return { title: "Funded", hint: "Deposit verified. Next: sweep (automatic)." };
-  if (s === "swept_locked") return { title: "Allocated", hint: "USDDD allocated. Accrual active. Withdraw locked." };
+
+  if (s === "swept_locked") {
+    if (isUnlocked) return { title: "Allocated", hint: "USDDD allocated. Accrual active. Withdraw available." };
+    return { title: "Allocated", hint: "USDDD allocated. Accrual active. Withdraw locked." };
+  }
+
+  if (s === "withdrawing" || s === "withdrawn") {
+    return { title: s === "withdrawn" ? "Withdrawn" : "Withdrawing", hint: "Withdrawal in progress / finalized." };
+  }
+
   return { title: s || "Unknown", hint: "Status reported by protocol." };
 }
 
@@ -313,6 +334,28 @@ export default function FundNetworkPage() {
     tries: number;
     major: boolean;
   }>({ open: false, ref: "", tx: "", stage: "idle", tries: 0, major: false });
+
+  // ✅ Withdraw request modal (new)
+  const [withdrawModal, setWithdrawModal] = useState<{
+    open: boolean;
+    ref: string;
+    allocated: number;
+    accrued: number;
+    total: number;
+    to: string;
+    sid: string;
+    stage: "idle" | "requesting" | "success" | "error";
+    message?: string;
+  }>({
+    open: false,
+    ref: "",
+    allocated: 0,
+    accrued: 0,
+    total: 0,
+    to: "",
+    sid: "",
+    stage: "idle",
+  });
 
   // ---- derived model ----
   const model = activity?.model ?? {};
@@ -469,7 +512,7 @@ export default function FundNetworkPage() {
     };
 
     tick();
-    const t = setInterval(tick, 60000);
+    const t = setInterval(tick, 15000); // ✅ quicker refresh for live testing
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -519,6 +562,10 @@ export default function FundNetworkPage() {
     });
   }, [dbPositions, dismissedSet, hideAwaiting]);
 
+  const anyWithdrawAvailable = useMemo(() => {
+    return visibleDbPositions.some((p) => String(p.status) === "swept_locked" && p.locked === false);
+  }, [visibleDbPositions]);
+
   const yourTotalUsdt = useMemo(() => {
     return visibleDbPositions.reduce((acc, p) => {
       const v = Number(p.funded_usdt ?? 0);
@@ -542,19 +589,15 @@ export default function FundNetworkPage() {
 
   // ---- actions ----
   function unlinkTerminalOnly() {
-    // Removes Terminal session link for this browser, keeps refs
     saveSessionId("");
     setSessionId("");
     setBound(false);
     setBindErr(null);
-
-    // Reset view state and re-hydrate by refs (or none)
     setDbPositions([]);
     void hydrateDbByRefsOrSession();
   }
 
   function fullResetLocalState() {
-    // Nukes all local Fund state in this browser
     saveSessionId("");
     saveRefs([]);
     saveDismissedRefs([]);
@@ -685,7 +728,6 @@ export default function FundNetworkPage() {
         return;
       }
 
-      // success
       setConfirmModal((prev) => ({
         ...prev,
         open: true,
@@ -715,6 +757,50 @@ export default function FundNetworkPage() {
       }));
     } finally {
       setConfirming((prev) => ({ ...prev, [ref]: false }));
+    }
+  }
+
+  // ✅ Withdraw request (calls request-only route)
+  async function requestWithdraw(ref: string) {
+    const sid = withdrawModal.sid.trim();
+    const to = withdrawModal.to.trim();
+
+    if (!sid) {
+      setWithdrawModal((p) => ({ ...p, stage: "error", message: "Enter a fresh Terminal session_id (OTP)." }));
+      return;
+    }
+    if (!isLikelyEvmAddress(to)) {
+      setWithdrawModal((p) => ({ ...p, stage: "error", message: "Invalid destination address (must be EVM 0x...)." }));
+      return;
+    }
+
+    setWithdrawModal((p) => ({ ...p, stage: "requesting", message: "Submitting withdraw request..." }));
+
+    try {
+      const r = await fetch("/api/fund/withdraw/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: sid, position_ref: ref, to_address: to }),
+        cache: "no-store",
+      });
+
+      const j: any = await r.json().catch(() => null);
+
+      if (!r.ok || !j?.ok) {
+        setWithdrawModal((p) => ({ ...p, stage: "error", message: String(j?.error ?? `request failed (${r.status})`) }));
+        return;
+      }
+
+      setWithdrawModal((p) => ({
+        ...p,
+        stage: "success",
+        message: j?.mode === "already_requested" ? "Already requested (idempotent)." : "Requested OK (awaiting execution).",
+      }));
+
+      // refresh positions so UI reflects any future status changes
+      await hydrateDbByRefsOrSession();
+    } catch (e: any) {
+      setWithdrawModal((p) => ({ ...p, stage: "error", message: String(e?.message ?? "request failed") }));
     }
   }
 
@@ -801,6 +887,103 @@ export default function FundNetworkPage() {
           </div>
         </div>
       </header>
+
+      {/* Withdraw modal */}
+      {withdrawModal.open ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-[92%] max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-100">Withdraw (request)</div>
+                <div className="mt-1 text-[12px] text-slate-400">
+                  Ref: <span className="font-mono text-slate-200">{withdrawModal.ref}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWithdrawModal((p) => ({ ...p, open: false, stage: "idle", message: undefined }))}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px]">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Allocated</span>
+                <span className="text-slate-200">{fmtNum(withdrawModal.allocated)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-slate-500">Accrued (truth)</span>
+                <span className="text-slate-200">{fmtNum(withdrawModal.accrued)}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between border-t border-slate-800/60 pt-2">
+                <span className="text-slate-400">Total payout</span>
+                <span className="text-slate-100 font-semibold">{fmtNum(withdrawModal.total)}</span>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
+              <div className="font-semibold text-amber-200/90">Warning</div>
+              <div className="mt-1">
+                Withdrawals are irreversible. Only withdraw to an address you control. Destination must be able to receive BEP-20 tokens on BNB Chain.
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <div className="text-[12px] text-slate-400">Destination address (EVM)</div>
+              <input
+                value={withdrawModal.to}
+                onChange={(e) => setWithdrawModal((p) => ({ ...p, to: e.target.value }))}
+                placeholder="0x..."
+                className="w-full rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-600"
+              />
+              <div className="text-[11px] text-slate-500">
+                {withdrawModal.to.trim()
+                  ? isLikelyEvmAddress(withdrawModal.to.trim())
+                    ? "✅ valid EVM address"
+                    : "❌ invalid address"
+                  : "Enter destination address"}
+              </div>
+
+              <div className="mt-2 text-[12px] text-slate-400">Fresh Terminal session_id (OTP)</div>
+              <input
+                value={withdrawModal.sid}
+                onChange={(e) => setWithdrawModal((p) => ({ ...p, sid: e.target.value }))}
+                placeholder="Paste fresh session_id from Terminal"
+                className="w-full rounded-md border border-slate-800 bg-slate-950/50 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-600"
+              />
+              <div className="text-[11px] text-slate-500">Open Terminal, refresh to get a fresh session_id, then paste it here.</div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => requestWithdraw(withdrawModal.ref)}
+                disabled={withdrawModal.stage === "requesting"}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70 disabled:opacity-60"
+              >
+                {withdrawModal.stage === "requesting" ? "Requesting..." : "Request Withdraw"}
+              </button>
+            </div>
+
+            {withdrawModal.message ? (
+              <div
+                className={`mt-3 rounded-lg border p-3 text-[12px] ${
+                  withdrawModal.stage === "success"
+                    ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-200"
+                    : withdrawModal.stage === "error"
+                      ? "border-red-900/40 bg-red-950/20 text-red-200"
+                      : "border-slate-800/60 bg-slate-950/30 text-slate-200"
+                }`}
+              >
+                {withdrawModal.message}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {/* Confirm modal */}
       {confirmModal.open ? (
@@ -1057,9 +1240,9 @@ export default function FundNetworkPage() {
                     type="button"
                     disabled
                     className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-400 opacity-70 cursor-not-allowed"
-                    title="Locked until admin unlock"
+                    title="Withdraw is per-position in the table below"
                   >
-                    Withdraw (Locked)
+                    Withdraw (per position)
                   </button>
                 </>
               ) : (
@@ -1283,7 +1466,18 @@ export default function FundNetworkPage() {
                   {hideAwaiting ? "Hide Awaiting: ON" : "Hide Awaiting: OFF"}
                 </button>
 
-                <div className="text-[11px] text-slate-500">{loadingDb ? "Refreshing..." : "Withdraw shown but locked"}</div>
+                <div className="text-[11px] text-slate-500">
+                  {loadingDb ? "Refreshing..." : anyWithdrawAvailable ? "Withdraw available" : "Withdraw locked"}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void hydrateDbByRefsOrSession()}
+                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                  title="Refresh now"
+                >
+                  Refresh
+                </button>
               </div>
             </div>
 
@@ -1313,8 +1507,11 @@ export default function FundNetworkPage() {
                     </tr>
                   ) : (
                     visibleDbPositions.map((p) => {
-                      const stage = statusToStage(p.status);
+                      const stage = statusToStage(p.status, p.locked);
                       const total = computeAccruedTotalUsddd(p);
+                      const allocated = Number(p.usddd_allocated ?? 0);
+                      const accrued = Number(p.usddd_accrued_display ?? 0);
+                      const canWithdraw = String(p.status) === "swept_locked" && p.locked === false;
 
                       return (
                         <tr key={p.id} className="border-b border-slate-800/40 align-top">
@@ -1348,6 +1545,7 @@ export default function FundNetworkPage() {
                           <td className="py-2 pr-2">
                             <div className="text-slate-200">{stage.title}</div>
                             <div className="text-[11px] text-slate-500">{stage.hint}</div>
+                            <div className="text-[11px] text-slate-600">locked: {p.locked === false ? "false" : "true"}</div>
                           </td>
 
                           <td className="py-2 pl-2 text-right">
@@ -1363,14 +1561,37 @@ export default function FundNetworkPage() {
                                 </button>
                               ) : null}
 
-                              <button
-                                type="button"
-                                disabled
-                                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
-                                title="Locked until admin unlock"
-                              >
-                                Locked
-                              </button>
+                              {canWithdraw ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setWithdrawModal({
+                                      open: true,
+                                      ref: p.position_ref,
+                                      allocated: Number.isFinite(allocated) ? allocated : 0,
+                                      accrued: Number.isFinite(accrued) ? accrued : 0,
+                                      total: Number.isFinite(total ?? NaN) ? Number(total) : (Number.isFinite(allocated) ? allocated : 0) + (Number.isFinite(accrued) ? accrued : 0),
+                                      to: "",
+                                      sid: sessionIdRef.current.trim() || "",
+                                      stage: "idle",
+                                      message: undefined,
+                                    });
+                                  }}
+                                  className="rounded-md border border-emerald-900/60 bg-emerald-950/30 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-950/50"
+                                  title="Request withdraw (session-gated)"
+                                >
+                                  Withdraw
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
+                                  title="Locked until admin unlock"
+                                >
+                                  Locked
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
