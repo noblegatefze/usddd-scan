@@ -640,6 +640,22 @@ export default function FundNetworkPage() {
     }, 0);
   }, [visibleDbPositions]);
 
+  const yourTotalWithdrawn = useMemo(() => {
+    // sum total paid out for withdrawn positions (allocated + accrued_display snapshot)
+    return visibleDbPositions.reduce((acc, p) => {
+      if (String(p.status) !== "withdrawn") return acc;
+      const a = Number(p.usddd_allocated ?? 0);
+      const c = Number(p.usddd_accrued_display ?? 0);
+      const add = (Number.isFinite(a) ? a : 0) + (Number.isFinite(c) ? c : 0);
+      return acc + add;
+    }, 0);
+  }, [visibleDbPositions]);
+
+  const yourActiveCustodyTotal = useMemo(() => {
+    // what is currently active in custody (allocated + accrued, excluding withdrawn)
+    return (yourTotalAllocated + yourTotalAccrued);
+  }, [yourTotalAllocated, yourTotalAccrued]);
+
   // ---- actions ----
   function unlinkTerminalOnly() {
     saveSessionId("");
@@ -1145,13 +1161,12 @@ export default function FundNetworkPage() {
 
             {withdrawModal.message ? (
               <div
-                className={`mt-3 rounded-lg border p-3 text-[12px] ${
-                  withdrawModal.stage === "success"
-                    ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-200"
-                    : withdrawModal.stage === "error"
-                      ? "border-red-900/40 bg-red-950/20 text-red-200"
-                      : "border-slate-800/60 bg-slate-950/30 text-slate-200"
-                }`}
+                className={`mt-3 rounded-lg border p-3 text-[12px] ${withdrawModal.stage === "success"
+                  ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-200"
+                  : withdrawModal.stage === "error"
+                    ? "border-red-900/40 bg-red-950/20 text-red-200"
+                    : "border-slate-800/60 bg-slate-950/30 text-slate-200"
+                  }`}
               >
                 {withdrawModal.message}
               </div>
@@ -1565,26 +1580,40 @@ export default function FundNetworkPage() {
 
               <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
                 <div className="text-[12px] text-slate-400">{bound ? "Your Totals (Terminal)" : "Your Totals (saved refs)"}</div>
+
                 <div className="mt-2 grid gap-2">
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-slate-500">Positions</span>
                     <span className="text-slate-200">{visibleDbPositions.length}</span>
                   </div>
+
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-slate-500">USDT funded</span>
                     <span className="text-slate-200">{fmtNum(yourTotalUsdt)}</span>
                   </div>
+
+                  <div className="mt-1 border-t border-slate-800/60 pt-2 text-[11px] text-slate-500">Active custody</div>
+
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-slate-500">USDDD allocated (custodied)</span>
                     <span className="text-slate-200">{fmtNum(yourTotalAllocated)}</span>
                   </div>
+
                   <div className="flex items-center justify-between text-[12px]">
                     <span className="text-slate-500">USDDD accrued (truth)</span>
                     <span className="text-slate-200">{fmtNum(yourTotalAccrued)}</span>
                   </div>
+
                   <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-slate-500">Total (allocated + accrued)</span>
-                    <span className="text-slate-200">{fmtNum(yourTotalAllocated + yourTotalAccrued)}</span>
+                    <span className="text-slate-500">Active total (allocated + accrued)</span>
+                    <span className="text-slate-200">{fmtNum(yourActiveCustodyTotal)}</span>
+                  </div>
+
+                  <div className="mt-1 border-t border-slate-800/60 pt-2 text-[11px] text-slate-500">Finalized</div>
+
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="text-slate-500">Withdrawn (total paid)</span>
+                    <span className="text-slate-200">{fmtNum(yourTotalWithdrawn)}</span>
                   </div>
                 </div>
               </div>
@@ -1602,23 +1631,37 @@ export default function FundNetworkPage() {
                         <span className="text-slate-500">Total funded (USDT)</span>
                         <span className="text-slate-200">{fmtNum(fundSummary.total_funded_usdt)}</span>
                       </div>
+
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="text-slate-500">Active positions</span>
                         <span className="text-slate-200">{fundSummary.active_positions}</span>
                       </div>
+
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="text-slate-500">Pending positions</span>
                         <span className="text-slate-200">{fundSummary.pending_positions}</span>
                       </div>
+
+                      <div className="mt-1 border-t border-slate-800/60 pt-2 text-[11px] text-slate-500">Active custody</div>
+
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="text-slate-500">Accrued (USDDD)</span>
                         <span className="text-slate-200">{fmtNum(fundSummary.total_accrued_usddd)}</span>
                       </div>
+
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="text-slate-500">Total (allocated + accrued)</span>
                         <span className="text-slate-200">{fmtNum(fundSummary.total_with_accrual_usddd)}</span>
                       </div>
+
+                      <div className="mt-1 border-t border-slate-800/60 pt-2 text-[11px] text-slate-500">Finalized</div>
+
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="text-slate-500">Withdrawn (this Terminal)</span>
+                        <span className="text-slate-200">{fmtNum(yourTotalWithdrawn)}</span>
+                      </div>
                     </div>
+
                   ) : (
                     <span>Loading...</span>
                   )}
