@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { persistSession: false },
     });
+
     // Maintenance gate (DB-authoritative)
     const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
     if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
@@ -25,6 +26,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     }
 
+    const SELECT_COLS = `
+      id,
+      position_ref,
+      issued_deposit_address,
+      funded_usdt,
+      funded_at,
+      deposit_tx_hash,
+      status,
+      locked,
+      sweep_tx_hash,
+      swept_at,
+      gas_topup_tx_hash,
+      gas_topup_bnb,
+      gas_topup_at,
+      usddd_allocated,
+      usddd_accrued_display,
+      created_at,
+      terminal_user_id
+    `;
 
     // Mode A: session_id -> resolve terminal user -> return all bound positions
     if (session_id) {
@@ -40,24 +60,7 @@ export async function POST(req: Request) {
 
       const { data, error } = await sb
         .from("fund_positions")
-        .select(`
-          id,
-          position_ref,
-          issued_deposit_address,
-          funded_usdt,
-          funded_at,
-          deposit_tx_hash,
-          status,
-          sweep_tx_hash,
-          swept_at,
-          gas_topup_tx_hash,
-          gas_topup_bnb,
-          gas_topup_at,
-          usddd_allocated,
-          usddd_accrued_display,
-          created_at,
-          terminal_user_id
-        `)
+        .select(SELECT_COLS)
         .eq("terminal_user_id", sess.user_id);
 
       if (error) throw error;
@@ -69,31 +72,14 @@ export async function POST(req: Request) {
       });
     }
 
-    // Mode B: refs -> return those positions (existing behavior)
+    // Mode B: refs -> return those positions
     if (refs.length === 0) {
       return NextResponse.json({ ok: true, mode: "refs", positions: [] });
     }
 
     const { data, error } = await sb
       .from("fund_positions")
-      .select(`
-        id,
-        position_ref,
-        issued_deposit_address,
-        funded_usdt,
-        funded_at,
-        deposit_tx_hash,
-        status,
-        sweep_tx_hash,
-        swept_at,
-        gas_topup_tx_hash,
-        gas_topup_bnb,
-        gas_topup_at,
-        usddd_allocated,
-        usddd_accrued_display,
-        created_at,
-        terminal_user_id
-      `)
+      .select(SELECT_COLS)
       .in("position_ref", refs);
 
     if (error) throw error;
