@@ -65,6 +65,24 @@ type DbPosition = {
   locked?: boolean | null;
 };
 
+type WithdrawalStatusRow = {
+  id: string;
+  position_ref: string;
+  to_address: string;
+  status: string;
+  requested_at?: string | null;
+  executing_at?: string | null;
+  minted_at?: string | null;
+  swept_at?: string | null;
+  executed_at?: string | null;
+  amount_allocated_usddd?: number | string | null;
+  amount_accrued_usddd?: number | string | null;
+  amount_total_usddd?: number | string | null;
+  mint_tx_hash?: string | null;
+  sweep_tx_hash?: string | null;
+  last_error?: string | null;
+};
+
 const LINKS = {
   home: "/",
   terminal: "https://digdug.do",
@@ -105,6 +123,15 @@ function formatHMS(ms: number): string {
   const min = Math.floor(rem / 60);
   const sec = rem % 60;
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function fmtIsoOrDash(ts?: string | null) {
+  if (!ts) return "—";
+  try {
+    return new Date(ts).toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  } catch {
+    return String(ts);
+  }
 }
 
 function GoldenPulsePills({ className = "" }: { className?: string }) {
@@ -335,7 +362,7 @@ export default function FundNetworkPage() {
     major: boolean;
   }>({ open: false, ref: "", tx: "", stage: "idle", tries: 0, major: false });
 
-  // ✅ Withdraw request modal (new)
+  // ✅ Withdraw request modal
   const [withdrawModal, setWithdrawModal] = useState<{
     open: boolean;
     ref: string;
@@ -356,6 +383,15 @@ export default function FundNetworkPage() {
     sid: "",
     stage: "idle",
   });
+
+  // ✅ Withdraw receipt modal (new)
+  const [receiptModal, setReceiptModal] = useState<{
+    open: boolean;
+    ref: string;
+    stage: "idle" | "loading" | "ready" | "error";
+    message?: string;
+    row?: WithdrawalStatusRow | null;
+  }>({ open: false, ref: "", stage: "idle", row: null });
 
   // ---- derived model ----
   const model = activity?.model ?? {};
@@ -392,7 +428,6 @@ export default function FundNetworkPage() {
       return principal + accruedTruth;
     }
 
-    // Fallback: estimate only if DB value is missing (shouldn't happen, but safe)
     const startMs = p?.usddd_accrual_started_at
       ? Date.parse(String(p.usddd_accrual_started_at))
       : p?.swept_at
@@ -439,6 +474,21 @@ export default function FundNetworkPage() {
       // ignore
     } finally {
       setLoadingDb(false);
+    }
+  }
+
+  async function openWithdrawReceipt(ref: string) {
+    setReceiptModal({ open: true, ref, stage: "loading", row: null, message: "Loading receipt..." });
+    try {
+      const r = await fetch(`/api/fund/withdraw/status?ref=${encodeURIComponent(ref)}`, { cache: "no-store" });
+      const j: any = await r.json().catch(() => null);
+      if (!r.ok || !j?.ok || !j?.withdrawal) {
+        setReceiptModal({ open: true, ref, stage: "error", row: null, message: String(j?.error ?? `Failed (${r.status})`) });
+        return;
+      }
+      setReceiptModal({ open: true, ref, stage: "ready", row: j.withdrawal as WithdrawalStatusRow, message: undefined });
+    } catch (e: any) {
+      setReceiptModal({ open: true, ref, stage: "error", row: null, message: String(e?.message ?? "Failed to load receipt") });
     }
   }
 
@@ -512,7 +562,7 @@ export default function FundNetworkPage() {
     };
 
     tick();
-    const t = setInterval(tick, 15000); // ✅ quicker refresh for live testing
+    const t = setInterval(tick, 15000);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -575,6 +625,8 @@ export default function FundNetworkPage() {
 
   const yourTotalAllocated = useMemo(() => {
     return visibleDbPositions.reduce((acc, p) => {
+      // exclude withdrawn from “custody allocated” totals
+      if (String(p.status) === "withdrawn") return acc;
       const v = Number(p.usddd_allocated ?? 0);
       return Number.isFinite(v) ? acc + v : acc;
     }, 0);
@@ -761,7 +813,7 @@ export default function FundNetworkPage() {
     }
   }
 
-  // ✅ Withdraw request (calls request-only route)
+  // ✅ Withdraw request
   async function requestWithdraw(ref: string) {
     const sid = withdrawModal.sid.trim();
     const to = withdrawModal.to.trim();
@@ -798,7 +850,6 @@ export default function FundNetworkPage() {
         message: j?.mode === "already_requested" ? "Already requested (idempotent)." : "Requested OK (awaiting execution).",
       }));
 
-      // refresh positions so UI reflects any future status changes
       await hydrateDbByRefsOrSession();
     } catch (e: any) {
       setWithdrawModal((p) => ({ ...p, stage: "error", message: String(e?.message ?? "request failed") }));
@@ -889,7 +940,130 @@ export default function FundNetworkPage() {
         </div>
       </header>
 
-      {/* Withdraw modal */}
+      {/* ✅ Withdraw receipt modal */}
+      {receiptModal.open ? (
+        <div className="fixed inset-0 z-[125] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-[92%] max-w-xl rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-100">Withdrawal receipt</div>
+                <div className="mt-1 text-[12px] text-slate-400">
+                  Ref: <span className="font-mono text-slate-200">{receiptModal.ref}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReceiptModal({ open: false, ref: "", stage: "idle", row: null, message: undefined })}
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Close
+              </button>
+            </div>
+
+            {receiptModal.stage === "loading" ? (
+              <div className="mt-4 text-[12px] text-slate-400">{receiptModal.message ?? "Loading..."}</div>
+            ) : receiptModal.stage === "error" ? (
+              <div className="mt-4 rounded-lg border border-red-900/40 bg-red-950/20 p-3 text-[12px] text-red-200">
+                {receiptModal.message ?? "Failed to load receipt"}
+              </div>
+            ) : receiptModal.row ? (
+              <>
+                <div className="mt-4 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Status</span>
+                    <span className="text-slate-200">{String(receiptModal.row.status || "--")}</span>
+                  </div>
+
+                  <div className="mt-2 grid gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Allocated</span>
+                      <span className="text-slate-200">{fmtDec(Number(receiptModal.row.amount_allocated_usddd ?? 0), 6)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Accrued</span>
+                      <span className="text-slate-200">{fmtDec(Number(receiptModal.row.amount_accrued_usddd ?? 0), 6)}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-slate-800/60 pt-2">
+                      <span className="text-slate-400">Total paid</span>
+                      <span className="text-slate-100 font-semibold">{fmtDec(Number(receiptModal.row.amount_total_usddd ?? 0), 6)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px]">
+                  <div className="text-slate-400">Destination</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <code className="flex-1 break-all rounded-md border border-slate-800 bg-slate-950/60 px-3 py-2 text-[12px] text-slate-200">
+                      {receiptModal.row.to_address}
+                    </code>
+                    <CopyBtn text={String(receiptModal.row.to_address)} />
+                    <a
+                      href={`${BSC_SCAN_BASE}/address/${receiptModal.row.to_address}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+                    >
+                      View address
+                    </a>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px]">
+                  <div className="text-slate-400">Transactions</div>
+
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-slate-500">Sweep (deposit → destination)</span>
+                    {receiptModal.row.sweep_tx_hash ? (
+                      <div className="flex items-center gap-2">
+                        <TxLink hash={String(receiptModal.row.sweep_tx_hash)} />
+                        <CopyBtn text={String(receiptModal.row.sweep_tx_hash)} />
+                      </div>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-slate-500">Mint (accrued)</span>
+                    {receiptModal.row.mint_tx_hash ? (
+                      <div className="flex items-center gap-2">
+                        <TxLink hash={String(receiptModal.row.mint_tx_hash)} />
+                        <CopyBtn text={String(receiptModal.row.mint_tx_hash)} />
+                      </div>
+                    ) : (
+                      <span className="text-slate-600">—</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px]">
+                  <div className="text-slate-400">Timeline</div>
+                  <div className="mt-2 grid gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Requested</span>
+                      <span className="text-slate-200">{fmtIsoOrDash(receiptModal.row.requested_at)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Executed</span>
+                      <span className="text-slate-200">{fmtIsoOrDash(receiptModal.row.executed_at ?? receiptModal.row.swept_at)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {receiptModal.row.last_error ? (
+                  <div className="mt-3 rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
+                    <div className="font-semibold text-amber-200/90">Last error</div>
+                    <div className="mt-1 break-words">{String(receiptModal.row.last_error)}</div>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Withdraw request modal (existing) */}
       {withdrawModal.open ? (
         <div className="fixed inset-0 z-[120] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -971,12 +1145,13 @@ export default function FundNetworkPage() {
 
             {withdrawModal.message ? (
               <div
-                className={`mt-3 rounded-lg border p-3 text-[12px] ${withdrawModal.stage === "success"
-                  ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-200"
-                  : withdrawModal.stage === "error"
-                    ? "border-red-900/40 bg-red-950/20 text-red-200"
-                    : "border-slate-800/60 bg-slate-950/30 text-slate-200"
-                  }`}
+                className={`mt-3 rounded-lg border p-3 text-[12px] ${
+                  withdrawModal.stage === "success"
+                    ? "border-emerald-900/40 bg-emerald-950/20 text-emerald-200"
+                    : withdrawModal.stage === "error"
+                      ? "border-red-900/40 bg-red-950/20 text-red-200"
+                      : "border-slate-800/60 bg-slate-950/30 text-slate-200"
+                }`}
               >
                 {withdrawModal.message}
               </div>
@@ -985,7 +1160,7 @@ export default function FundNetworkPage() {
         </div>
       ) : null}
 
-      {/* Confirm modal */}
+      {/* Confirm deposit modal (existing) */}
       {confirmModal.open ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -1047,7 +1222,7 @@ export default function FundNetworkPage() {
         </div>
       ) : null}
 
-      {/* Help modal */}
+      {/* Help modal (existing) */}
       {helpModalOpen ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center">
           <button type="button" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setHelpModalOpen(false)} aria-label="Close" />
@@ -1096,7 +1271,7 @@ export default function FundNetworkPage() {
         </div>
       ) : null}
 
-      {/* Dismiss modal */}
+      {/* Dismiss modal (existing) */}
       {dismissModal.open ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -1574,8 +1749,7 @@ export default function FundNetworkPage() {
                                       total:
                                         Number.isFinite(total ?? NaN)
                                           ? Number(total)
-                                          : (Number.isFinite(allocated) ? allocated : 0) +
-                                          (Number.isFinite(accrued) ? accrued : 0),
+                                          : (Number.isFinite(allocated) ? allocated : 0) + (Number.isFinite(accrued) ? accrued : 0),
                                       to: "",
                                       sid: sessionIdRef.current.trim() || "",
                                       stage: "idle",
@@ -1588,9 +1762,14 @@ export default function FundNetworkPage() {
                                   Withdraw
                                 </button>
                               ) : isWithdrawn ? (
-                                <span className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+                                <button
+                                  type="button"
+                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
+                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                                  title="View withdrawal receipt"
+                                >
                                   Withdrawn
-                                </span>
+                                </button>
                               ) : (
                                 <button
                                   type="button"
@@ -1600,7 +1779,6 @@ export default function FundNetworkPage() {
                                   Locked
                                 </button>
                               )}
-
                             </div>
                           </td>
                         </tr>
