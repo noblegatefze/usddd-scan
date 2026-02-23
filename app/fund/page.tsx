@@ -341,6 +341,7 @@ export default function FundNetworkPage() {
   const [positions, setPositions] = useState<IssuedPosition[]>([]);
   const [dbPositions, setDbPositions] = useState<DbPosition[]>([]);
   const [withdrawMap, setWithdrawMap] = useState<Record<string, WithdrawalStatusRow>>({});
+  const [wdDebug, setWdDebug] = useState<string>("");
   const [loadingDb, setLoadingDb] = useState(false);
 
   const [fundSummary, setFundSummary] = useState<{
@@ -607,6 +608,12 @@ export default function FundNetworkPage() {
         });
 
         const jb: any = await rb.json().catch(() => null);
+
+        if (!cancelled) {
+          const n = Array.isArray(jb?.rows) ? jb.rows.length : 0;
+          const err = jb?.error ? String(jb.error) : "";
+          setWdDebug(`wdFetch: ok=${String(rb.ok)} status=${rb.status} rows=${n}${err ? ` err=${err}` : ""}`);
+        }
 
         if (!cancelled && rb.ok && jb?.ok && Array.isArray(jb.rows)) {
           const map: Record<string, WithdrawalStatusRow> = {};
@@ -1826,6 +1833,7 @@ export default function FundNetworkPage() {
                             <div className="text-[11px] text-slate-500">{stage.hint}</div>
                             <div className="text-[11px] text-slate-600">locked: {p.locked === false ? "false" : "true"}</div>
                             <div className="text-[11px] text-slate-600">wd: {String(withdrawMap[p.position_ref]?.status ?? "—")}</div>
+                            <div className="text-[11px] text-slate-600">{wdDebug}</div>
                           </td>
 
                           <td className="py-2 pl-2 text-right">
