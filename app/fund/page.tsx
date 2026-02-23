@@ -258,6 +258,19 @@ function isLikelyEvmAddress(s: string) {
   return true;
 }
 
+function isPendingWithdrawalStatus(s: string | null | undefined) {
+  const v = String(s || "").toLowerCase();
+  if (!v) return false;
+  if (v === "executed") return false;
+  return (
+    v === "requested" ||
+    v === "executing" ||
+    v === "minted" ||
+    v === "mint_failed" ||
+    v === "sweep_failed"
+  );
+}
+
 function statusToStage(status: string, locked?: boolean | null) {
   const s = String(status || "");
   const isUnlocked = locked === false;
@@ -327,6 +340,7 @@ export default function FundNetworkPage() {
 
   const [positions, setPositions] = useState<IssuedPosition[]>([]);
   const [dbPositions, setDbPositions] = useState<DbPosition[]>([]);
+  const [withdrawMap, setWithdrawMap] = useState<Record<string, WithdrawalStatusRow>>({});
   const [loadingDb, setLoadingDb] = useState(false);
 
   const [fundSummary, setFundSummary] = useState<{
@@ -468,6 +482,28 @@ export default function FundNetworkPage() {
           return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
         });
         setDbPositions(arr);
+
+        // refresh withdrawal status map for visible refs
+        try {
+          const refs = arr.map((x) => x.position_ref).filter(Boolean);
+          const rb = await fetch("/api/fund/withdraw/status-batch", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ refs }),
+            cache: "no-store",
+          });
+          const jb: any = await rb.json().catch(() => null);
+          if (rb.ok && jb?.ok && Array.isArray(jb.rows)) {
+            const map: Record<string, WithdrawalStatusRow> = {};
+            for (const w of jb.rows as WithdrawalStatusRow[]) {
+              map[String(w.position_ref)] = w;
+            }
+            setWithdrawMap(map);
+          }
+        } catch {
+          // ignore
+        }
+
         setBound(Boolean(sid) && j.mode === "terminal_user");
       }
     } catch {
@@ -1734,6 +1770,8 @@ export default function FundNetworkPage() {
                       const allocated = Number(p.usddd_allocated ?? 0);
                       const accrued = Number(p.usddd_accrued_display ?? 0);
                       const canWithdraw = String(p.status) === "swept_locked" && p.locked === false;
+                      const wRow = withdrawMap[p.position_ref];
+                      const hasPending = isPendingWithdrawalStatus(wRow?.status);
 
                       return (
                         <tr key={p.id} className="border-b border-slate-800/40 align-top">
