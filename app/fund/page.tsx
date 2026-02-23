@@ -483,27 +483,6 @@ export default function FundNetworkPage() {
         });
         setDbPositions(arr);
 
-        // refresh withdrawal status map for visible refs
-        try {
-          const refs = arr.map((x) => x.position_ref).filter(Boolean);
-          const rb = await fetch("/api/fund/withdraw/status-batch", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ refs }),
-            cache: "no-store",
-          });
-          const jb: any = await rb.json().catch(() => null);
-          if (rb.ok && jb?.ok && Array.isArray(jb.rows)) {
-            const map: Record<string, WithdrawalStatusRow> = {};
-            for (const w of jb.rows as WithdrawalStatusRow[]) {
-              map[String(w.position_ref)] = w;
-            }
-            setWithdrawMap(map);
-          }
-        } catch {
-          // ignore
-        }
-
         setBound(Boolean(sid) && j.mode === "terminal_user");
       }
     } catch {
@@ -605,6 +584,46 @@ export default function FundNetworkPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flagsLoaded, paused, sessionId]);
+
+  useEffect(() => {
+    if (!flagsLoaded || paused) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const refs = dbPositions.map((p) => p.position_ref).filter(Boolean);
+
+        if (refs.length === 0) {
+          if (!cancelled) setWithdrawMap({});
+          return;
+        }
+
+        const rb = await fetch("/api/fund/withdraw/status-batch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refs }),
+          cache: "no-store",
+        });
+
+        const jb: any = await rb.json().catch(() => null);
+
+        if (!cancelled && rb.ok && jb?.ok && Array.isArray(jb.rows)) {
+          const map: Record<string, WithdrawalStatusRow> = {};
+          for (const w of jb.rows as WithdrawalStatusRow[]) {
+            map[String(w.position_ref)] = w;
+          }
+          setWithdrawMap(map);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [flagsLoaded, paused, dbPositions]);
 
   useEffect(() => {
     if (!flagsLoaded || paused) return;
