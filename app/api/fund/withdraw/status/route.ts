@@ -48,7 +48,19 @@ export async function GET(req: Request) {
 
     if (error || !data) return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
 
-    return NextResponse.json({ ok: true, withdrawal: data });
+    // NEW: also fetch position truth (allocated/accrued) so pending receipts aren't blank
+    const { data: pos, error: posErr } = await sb
+      .from("fund_positions")
+      .select("position_ref,status,locked,usddd_allocated,usddd_accrued_display")
+      .eq("position_ref", ref)
+      .limit(1)
+      .single();
+
+    return NextResponse.json({
+      ok: true,
+      withdrawal: data,
+      position: posErr ? null : pos ?? null,
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "status failed" }, { status: 400 });
   }

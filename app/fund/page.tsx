@@ -406,7 +406,8 @@ export default function FundNetworkPage() {
     stage: "idle" | "loading" | "ready" | "error";
     message?: string;
     row?: WithdrawalStatusRow | null;
-  }>({ open: false, ref: "", stage: "idle", row: null });
+    position?: DbPosition | null;
+  }>({ open: false, ref: "", stage: "idle", row: null, position: null });
 
   // ---- derived model ----
   const model = activity?.model ?? {};
@@ -494,7 +495,7 @@ export default function FundNetworkPage() {
   }
 
   async function openWithdrawReceipt(ref: string) {
-    setReceiptModal({ open: true, ref, stage: "loading", row: null, message: "Loading receipt..." });
+    setReceiptModal({ open: true, ref, stage: "loading", row: null, position: null, message: "Loading receipt..." });
     try {
       const r = await fetch(`/api/fund/withdraw/status?ref=${encodeURIComponent(ref)}`, { cache: "no-store" });
       const j: any = await r.json().catch(() => null);
@@ -502,7 +503,14 @@ export default function FundNetworkPage() {
         setReceiptModal({ open: true, ref, stage: "error", row: null, message: String(j?.error ?? `Failed (${r.status})`) });
         return;
       }
-      setReceiptModal({ open: true, ref, stage: "ready", row: j.withdrawal as WithdrawalStatusRow, message: undefined });
+      setReceiptModal({
+        open: true,
+        ref,
+        stage: "ready",
+        row: j.withdrawal as WithdrawalStatusRow,
+        position: (j.position ?? null) as any,
+        message: undefined,
+      });
     } catch (e: any) {
       setReceiptModal({ open: true, ref, stage: "error", row: null, message: String(e?.message ?? "Failed to load receipt") });
     }
@@ -1050,7 +1058,7 @@ export default function FundNetworkPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setReceiptModal({ open: false, ref: "", stage: "idle", row: null, message: undefined })}
+                onClick={() => setReceiptModal({ open: false, ref: "", stage: "idle", row: null, position: null, message: undefined })}
                 className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
               >
                 Close
@@ -1071,20 +1079,47 @@ export default function FundNetworkPage() {
                     <span className="text-slate-200">{String(receiptModal.row.status || "--")}</span>
                   </div>
 
-                  <div className="mt-2 grid gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Allocated</span>
-                      <span className="text-slate-200">{fmtDec(Number(receiptModal.row.amount_allocated_usddd ?? 0), 6)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Accrued</span>
-                      <span className="text-slate-200">{fmtDec(Number(receiptModal.row.amount_accrued_usddd ?? 0), 6)}</span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-slate-800/60 pt-2">
-                      <span className="text-slate-400">Total paid</span>
-                      <span className="text-slate-100 font-semibold">{fmtDec(Number(receiptModal.row.amount_total_usddd ?? 0), 6)}</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const ws = String(receiptModal.row?.status ?? "").toLowerCase();
+
+                    const allocSnap = Number(receiptModal.row?.amount_allocated_usddd ?? 0);
+                    const accrSnap = Number(receiptModal.row?.amount_accrued_usddd ?? 0);
+                    const totalSnap = Number(receiptModal.row?.amount_total_usddd ?? 0);
+
+                    const posAlloc = Number((receiptModal.position as any)?.usddd_allocated ?? 0);
+                    const posAccr = Number((receiptModal.position as any)?.usddd_accrued_display ?? 0);
+                    const posTotal = (Number.isFinite(posAlloc) ? posAlloc : 0) + (Number.isFinite(posAccr) ? posAccr : 0);
+
+                    const usePosition =
+                      (ws === "requested" || ws === "executing" || ws === "minted" || ws.includes("failed")) &&
+                      totalSnap <= 0;
+
+                    const showAlloc = usePosition ? posAlloc : allocSnap;
+                    const showAccr = usePosition ? posAccr : accrSnap;
+                    const showTotal = usePosition ? posTotal : totalSnap;
+
+                    return (
+                      <div className="mt-2 grid gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500">{usePosition ? "Allocated (position)" : "Allocated"}</span>
+                          <span className="text-slate-200">{fmtDec(Number(showAlloc ?? 0), 6)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500">{usePosition ? "Accrued (position)" : "Accrued"}</span>
+                          <span className="text-slate-200">{fmtDec(Number(showAccr ?? 0), 6)}</span>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-slate-800/60 pt-2">
+                          <span className="text-slate-400">{usePosition ? "Estimated total" : "Total paid"}</span>
+                          <span className="text-slate-100 font-semibold">{fmtDec(Number(showTotal ?? 0), 6)}</span>
+                        </div>
+                        {usePosition ? (
+                          <div className="text-[11px] text-slate-500">
+                            Note: totals are estimated from position truth until execution begins.
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="mt-3 rounded-lg border border-slate-800/60 bg-slate-950/30 p-3 text-[12px]">
