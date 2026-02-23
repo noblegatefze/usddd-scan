@@ -58,6 +58,11 @@ const GAS_MULT_DEN = 100n;
 
 export async function POST(req: Request) {
   try {
+    // secret gate (DO NOT make executor public)
+    const secret = req.headers.get("x-exec-secret") ?? "";
+    if (!secret || secret !== env("FUND_WITHDRAW_EXEC_SECRET")) {
+      return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+    }
     const j = await req.json().catch(() => ({} as any));
     const ref = typeof j?.ref === "string" ? j.ref.trim() : "";
 
