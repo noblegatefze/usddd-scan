@@ -600,27 +600,41 @@ export default function FundNetworkPage() {
           return;
         }
 
-        const rb = await fetch("/api/fund/withdraw/status-batch", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ refs }),
-          cache: "no-store",
-        });
-
-        const jb: any = await rb.json().catch(() => null);
-
-        if (!cancelled) {
-          const n = Array.isArray(jb?.rows) ? jb.rows.length : 0;
-          const err = jb?.error ? String(jb.error) : "";
-          setWdDebug(`wdFetch: ok=${String(rb.ok)} status=${rb.status} rows=${n}${err ? ` err=${err}` : ""}`);
+        const chunkSize = 200;
+        const chunks: string[][] = [];
+        for (let i = 0; i < refs.length; i += chunkSize) {
+          chunks.push(refs.slice(i, i + chunkSize));
         }
 
-        if (!cancelled && rb.ok && jb?.ok && Array.isArray(jb.rows)) {
-          const map: Record<string, WithdrawalStatusRow> = {};
-          for (const w of jb.rows as WithdrawalStatusRow[]) {
-            map[String(w.position_ref)] = w;
+        const merged: Record<string, WithdrawalStatusRow> = {};
+        let anyFail = false;
+        let failMsg = "";
+
+        for (const c of chunks) {
+          const rb = await fetch("/api/fund/withdraw/status-batch", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ refs: c }),
+            cache: "no-store",
+          });
+
+          const jb: any = await rb.json().catch(() => null);
+
+          if (!rb.ok || !jb?.ok || !Array.isArray(jb.rows)) {
+            anyFail = true;
+            failMsg = String(jb?.error ?? `failed (${rb.status})`);
+            continue;
           }
-          setWithdrawMap(map);
+
+          for (const w of jb.rows as WithdrawalStatusRow[]) {
+            merged[String(w.position_ref)] = w;
+          }
+        }
+
+        if (!cancelled) {
+          const totalRows = Object.keys(merged).length;
+          setWdDebug(`wdFetch: ok=${String(!anyFail)} chunks=${chunks.length} rows=${totalRows}${anyFail ? ` err=${failMsg}` : ""}`);
+          setWithdrawMap(merged);
         }
       } catch {
         // ignore
