@@ -1821,7 +1821,25 @@ export default function FundNetworkPage() {
                                 </button>
                               ) : null}
 
-                              {canWithdraw ? (
+                              {isWithdrawn ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
+                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                                  title="View withdrawal receipt"
+                                >
+                                  Withdrawn
+                                </button>
+                              ) : hasPending ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
+                                  className="rounded-md border border-amber-900/60 bg-amber-950/30 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-950/50"
+                                  title="Withdrawal is processing / queued. Click to view status."
+                                >
+                                  Processing
+                                </button>
+                              ) : canWithdraw ? (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1844,15 +1862,6 @@ export default function FundNetworkPage() {
                                   title="Request withdraw (session-gated)"
                                 >
                                   Withdraw
-                                </button>
-                              ) : isWithdrawn ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
-                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-                                  title="View withdrawal receipt"
-                                >
-                                  Withdrawn
                                 </button>
                               ) : (
                                 <button
