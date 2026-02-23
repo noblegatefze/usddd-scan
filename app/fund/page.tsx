@@ -1806,6 +1806,7 @@ export default function FundNetworkPage() {
                             <div className="text-slate-200">{stage.title}</div>
                             <div className="text-[11px] text-slate-500">{stage.hint}</div>
                             <div className="text-[11px] text-slate-600">locked: {p.locked === false ? "false" : "true"}</div>
+                            <div className="text-[11px] text-slate-600">wd: {String(withdrawMap[p.position_ref]?.status ?? "—")}</div>
                           </td>
 
                           <td className="py-2 pl-2 text-right">
