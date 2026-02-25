@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     const sb = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { persistSession: false },
     });
+
     // Maintenance gate (DB-authoritative)
     const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
     if (flagsErr) return NextResponse.json({ ok: false, paused: true }, { status: 503 });
@@ -35,7 +36,6 @@ export async function POST(req: Request) {
     if (row && (row.pause_all || row.pause_reserve)) {
       return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     }
-
 
     // resolve terminal_user_id from dd_sessions (best-effort)
     let terminalUserId: string | null = null;
@@ -158,32 +158,48 @@ export async function POST(req: Request) {
     // Auto-sweep immediately after confirm
     const origin = new URL(req.url).origin;
 
+    const execSecret = process.env.FUND_WITHDRAW_EXEC_SECRET || "";
+
     let sweep: any = null;
-    try {
-      const sr = await fetch(`${origin}/api/fund/sweep`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ref }),
-        cache: "no-store",
-      });
-      sweep = await sr.json();
-    } catch (e: any) {
-      sweep = { ok: false, error: e?.message ?? "sweep call failed" };
+    if (!execSecret) {
+      sweep = { ok: false, error: "internal_ops_secret_missing" };
+    } else {
+      try {
+        const sr = await fetch(`${origin}/api/fund/sweep`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-exec-secret": execSecret,
+          },
+          body: JSON.stringify({ ref }),
+          cache: "no-store",
+        });
+        sweep = await sr.json();
+      } catch (e: any) {
+        sweep = { ok: false, error: e?.message ?? "sweep call failed" };
+      }
     }
 
     // Auto-mint immediately after sweep success (idempotent route)
     let mint: any = null;
     if (sweep?.ok) {
-      try {
-        const mr = await fetch(`${origin}/api/fund/mint`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ref }),
-          cache: "no-store",
-        });
-        mint = await mr.json();
-      } catch (e: any) {
-        mint = { ok: false, error: e?.message ?? "mint call failed" };
+      if (!execSecret) {
+        mint = { ok: false, error: "internal_ops_secret_missing" };
+      } else {
+        try {
+          const mr = await fetch(`${origin}/api/fund/mint`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-exec-secret": execSecret,
+            },
+            body: JSON.stringify({ ref }),
+            cache: "no-store",
+          });
+          mint = await mr.json();
+        } catch (e: any) {
+          mint = { ok: false, error: e?.message ?? "mint call failed" };
+        }
       }
     }
 
