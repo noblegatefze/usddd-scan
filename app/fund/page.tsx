@@ -972,7 +972,8 @@ export default function FundNetworkPage() {
   return paused ? (
     <FundMaintenance />
   ) : (
-    <main className="min-h-screen w-full overflow-x-hidden bg-[#0b0f14] text-slate-200">
+    <main className="fv-fund min-h-screen w-full overflow-x-hidden bg-[#0b0f14] text-slate-200">
+      <style>{"\n.fv-fund{background:#04111e!important;color:#f6fbff;font-family:Arial,Helvetica,sans-serif}.fv-fund>header{background:#051927!important;border-color:#37dcec}.fv-fund .fund-shell{max-width:1280px;margin:auto;padding:16px clamp(10px,3vw,36px) 50px}.fund-hero,.fund-card,.fv-fund #positions{border:1px solid #37dcec!important;border-radius:7px;background:#061c2d!important}.fv-fund .fund-hero{min-height:clamp(205px,29vw,355px);padding:clamp(16px,4vw,47px);display:flex;flex-direction:column;align-items:flex-start;justify-content:center;background:linear-gradient(90deg,#031221ed,#03122190 43%,transparent 75%),url('https://www.digdug.do/flatverse-ice-wall.jpg') center 16%/cover no-repeat #061c2d!important}.fund-hero h1{margin:7px 0;font-size:clamp(35px,7vw,82px);font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:-.05em;line-height:.92;max-width:11ch}.fund-hero p{margin:6px 0 0;color:#e1eef6;max-width:37ch}.fund-eyebrow{color:#ffc624;border:1px solid #ffc624;border-radius:4px;padding:4px 8px;font-weight:800;font-size:13px}.fund-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}.fund-card{padding:15px;min-width:0}.fund-card h2,.fv-fund #positions h2{font-size:clamp(20px,2.4vw,29px);font-weight:850;margin:0 0 5px}.fund-card p{margin:5px 0;color:#bdd6e3}.fund-card a{color:#9df5ff}.fund-card .fund-view{display:inline-block;margin-top:8px;border:1px solid #37dcec;border-radius:5px;padding:6px 11px;color:#d6faff;font-weight:800}.fund-link label{display:block;font-size:13px;font-weight:800}.fund-link input{width:min(100%,420px);background:#071925;color:#f4fbff;border:1px solid #37dcec;border-radius:5px;padding:7px 9px}.fund-link .fund-link-btn{background:linear-gradient(#ffdb51,#ffb400);color:#08121d;border:1px solid #ffe188;font-weight:900}.fund-steps{padding:9px 12px;margin:0 0 12px;border:1px solid #238fa7;border-radius:6px;color:#badee9;display:flex;gap:8px 20px;flex-wrap:wrap;font-size:13px}.fv-fund #positions{scroll-margin-top:90px}.fv-fund :is(a,button,input):focus-visible{outline:2px solid #ffc624;outline-offset:2px}\n@media(max-width:760px){.fv-fund .fund-shell{padding-top:9px}.fv-fund .fund-hero{min-height:190px;background-position:64% 16%!important}.fund-hero h1{font-size:clamp(28px,8.5vw,51px)}.fund-hero p{font-size:13px;max-width:24ch}.fund-grid{grid-template-columns:1fr}.fund-link .fund-link-btn{width:100%}.fund-steps{display:grid;gap:5px}}\n"}</style>
       <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-[#0b0f14]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <a href="https://usddd.digdug.do" className="flex items-center gap-2 hover:opacity-90" title="Back to USDDD Scan">
@@ -1440,37 +1441,24 @@ export default function FundNetworkPage() {
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-6xl px-4 pt-6 pb-24">
-        <div className="grid min-w-0 gap-4 md:grid-cols-12">
-          {/* LEFT */}
-          <section className="md:col-span-7 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
-            <div className="mb-3">
-              <h1 className="text-base font-semibold text-slate-100">Fund Network</h1>
-              <div className="mt-1 text-[12px] text-slate-400 break-words">
-                Create a dedicated deposit address, fund with USDT (BEP-20), and receive custodied USDDD allocation tied to the protocol.
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
-              <div className="flex items-start gap-3">
-                <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1 h-4 w-4 accent-slate-200" />
-                <div className="flex-1">
-                  <div className="text-[12px] font-semibold text-slate-200">Understanding</div>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-400 break-words">
-                    <li>Each position uses a unique deposit address. Do not reuse old addresses.</li>
-                    <li>Send only USDT on BNB Chain (BEP-20). Other tokens/chains may be unrecoverable.</li>
-                    <li>For safety, deposits are confirmed by tx hash (receipt-verified).</li>
-                    <li>Withdrawals remain locked until admin unlock.</li>
-                  </ul>
-
-                  <div className="mt-3 rounded-md border border-slate-800/60 bg-slate-950/30 px-3 py-2 text-[12px] text-slate-300">
-                    <div className="font-semibold text-slate-200">Link to Terminal (recommended)</div>
+      <div className="fund-shell">
+        <section className="fund-hero">
+          <strong className="fund-eyebrow">USDDD Fund Network</strong>
+          <h1>Back the Exploration</h1>
+          <p>Access existing positions or open a dedicated USDT funding position.</p>
+        </section>
+        <div className="fund-grid">
+          <section className="fund-card"><h2>{bound ? "Your positions" : "Existing positions"}</h2><p>{bound ? "Review positions and receipts linked to your Terminal account." : "Link a Legacy Terminal session to access positions from another browser."}</p><a className="fund-view" href="#positions">View positions</a></section>
+          <section className="fund-card fund-link">
+                    <h2>Link Terminal session</h2>
                     <div className="mt-1 text-slate-400">
                       To access positions across devices, link this page to your DIGDUG Terminal session (no password required here).
                     </div>
 
+                    <label htmlFor="fund-session">Terminal session ID</label>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <input
+                        id="fund-session"
                         value={sessionId}
                         onChange={(e) => {
                           setSessionId(e.target.value);
@@ -1484,7 +1472,7 @@ export default function FundNetworkPage() {
                         type="button"
                         onClick={bindToTerminal}
                         disabled={binding || bound}
-                        className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70 disabled:opacity-60"
+                        className="fund-link-btn rounded-md px-3 py-2 text-sm disabled:opacity-60"
                       >
                         {binding ? "Linking..." : bound ? "Linked ✓" : "Link Terminal"}
                       </button>
@@ -1515,13 +1503,211 @@ export default function FundNetworkPage() {
                         rel="noreferrer"
                         className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
                       >
-                        Open Terminal
+                        Open Legacy Terminal
                       </a>
                     </div>
 
                     {bindErr ? <div className="mt-2 text-[12px] text-amber-200">{bindErr}</div> : null}
                     <div className="mt-2 text-[11px] text-slate-500">Tip: open Terminal in a separate tab, log in, then copy your session_id.</div>
-                  </div>
+                  </section>
+        </div>
+        <div className="fund-steps"><span>1. Link session</span><span>2. Review position</span><span>3. Confirm details</span></div>
+        <div className="grid min-w-0 gap-4 md:grid-cols-12">
+          {/* DB positions table */}
+          <section id="positions" className="md:col-span-12 min-w-0 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-slate-200">{bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}</h2>
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHideAwaiting((v) => !v)}
+                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                >
+                  {hideAwaiting ? "Hide Awaiting: ON" : "Hide Awaiting: OFF"}
+                </button>
+
+                <div className="text-[11px] text-slate-500">
+                  {loadingDb ? "Refreshing..." : anyWithdrawAvailable ? "Withdraw available" : "Withdraw locked"}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void hydrateDbByRefsOrSession()}
+                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                  title="Refresh now"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div className="-mx-4 md:mx-0 min-w-0 overflow-x-auto overscroll-x-contain px-4 md:px-0">
+              <table className="min-w-[860px] w-full text-[12px]">
+                <thead className="text-slate-400">
+                  <tr className="border-b border-slate-800/60">
+                    <th className="py-2 pr-4 text-left font-medium">Ref</th>
+                    <th className="py-2 pr-4 text-left font-medium">Deposit Address</th>
+                    <th className="py-2 pr-4 text-right font-medium">Funded (USDT)</th>
+                    <th className="py-2 pr-4 text-left font-medium">Deposit tx</th>
+                    <th className="py-2 pr-4 text-left font-medium">Sweep tx</th>
+                    <th className="py-2 pr-4 text-left font-medium">Gas topup</th>
+                    <th className="py-2 pr-4 text-right font-medium">Allocated (USDDD)</th>
+                    <th className="py-2 pr-4 text-right font-medium">Total (Allocated + Accrued)</th>
+                    <th className="py-2 pr-2 text-left font-medium">Stage</th>
+                    <th className="py-2 pl-2 text-right font-medium">Withdraw</th>
+                  </tr>
+                </thead>
+
+                <tbody className="text-slate-200">
+                  {visibleDbPositions.length === 0 ? (
+                    <tr>
+                      <td className="py-3 text-slate-500" colSpan={10}>
+                        No positions yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    visibleDbPositions.map((p) => {
+                      const stage = statusToStage(p.status, p.locked);
+                      const total = computeAccruedTotalUsddd(p);
+                      const isWithdrawn = String(p.status) === "withdrawn";
+                      const allocated = Number(p.usddd_allocated ?? 0);
+                      const accrued = Number(p.usddd_accrued_display ?? 0);
+                      const canWithdraw = String(p.status) === "swept_locked" && p.locked === false;
+                      const wRow = withdrawMap[p.position_ref];
+                      const hasPending = isPendingWithdrawalStatus(wRow?.status);
+
+                      return (
+                        <tr key={p.id} className="border-b border-slate-800/40 align-top">
+                          <td className="py-2 pr-4">{p.position_ref}</td>
+
+                          <td className="py-2 pr-4 font-mono break-all text-[11px] text-slate-300">
+                            {p.issued_deposit_address.slice(0, 10)}...{p.issued_deposit_address.slice(-6)}
+                          </td>
+
+                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "--"}</td>
+
+                          <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">--</span>}</td>
+
+                          <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">--</span>}</td>
+
+                          <td className="py-2 pr-4">
+                            {p.gas_topup_tx_hash ? (
+                              <div className="text-[11px]">
+                                <TxLink hash={p.gas_topup_tx_hash} />
+                                <div className="text-slate-500">{Number(p.gas_topup_bnb ?? 0) ? `${fmtDec(Number(p.gas_topup_bnb), 6)} BNB` : ""}</div>
+                              </div>
+                            ) : (
+                              <span className="text-slate-600">--</span>
+                            )}
+                          </td>
+
+                          <td className="py-2 pr-4 text-right">{p.usddd_allocated == null ? "--" : Number(p.usddd_allocated).toFixed(2)}</td>
+
+                          <td className="py-2 pr-4 text-right">{total == null ? "--" : fmtDec(total, 4)}</td>
+
+                          <td className="py-2 pr-2">
+                            <div className="text-slate-200">{stage.title}</div>
+                            <div className="text-[11px] text-slate-500">{stage.hint}</div>
+                            <div className="text-[11px] text-slate-600">locked: {p.locked === false ? "false" : "true"}</div>
+                            <div className="text-[11px] text-slate-600">wd: {String(withdrawMap[p.position_ref]?.status ?? "—")}</div>
+                            <div className="text-[11px] text-slate-600">{wdDebug}</div>
+                          </td>
+
+                          <td className="py-2 pl-2 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {String(p.status) === "awaiting_funds" && !p.deposit_tx_hash ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setDismissModal({ open: true, ref: p.position_ref })}
+                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                                  title="Hide this unfunded position from your list"
+                                >
+                                  Dismiss
+                                </button>
+                              ) : null}
+
+                              {isWithdrawn ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
+                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+                                  title="View withdrawal receipt"
+                                >
+                                  Withdrawn
+                                </button>
+                              ) : hasPending ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
+                                  className="rounded-md border border-amber-900/60 bg-amber-950/30 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-950/50"
+                                  title="Withdrawal is processing / queued. Click to view status."
+                                >
+                                  Processing
+                                </button>
+                              ) : canWithdraw ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setWithdrawModal({
+                                      open: true,
+                                      ref: p.position_ref,
+                                      allocated: Number.isFinite(allocated) ? allocated : 0,
+                                      accrued: Number.isFinite(accrued) ? accrued : 0,
+                                      total:
+                                        Number.isFinite(total ?? NaN)
+                                          ? Number(total)
+                                          : (Number.isFinite(allocated) ? allocated : 0) + (Number.isFinite(accrued) ? accrued : 0),
+                                      to: "",
+                                      sid: sessionIdRef.current.trim() || "",
+                                      stage: "idle",
+                                      message: undefined,
+                                    });
+                                  }}
+                                  className="rounded-md border border-emerald-900/60 bg-emerald-950/30 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-950/50"
+                                  title="Request withdraw (session-gated)"
+                                >
+                                  Withdraw
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
+                                >
+                                  Locked
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          {/* LEFT */}
+          <section className="md:col-span-7 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-3">
+              <h2 className="text-base font-semibold text-slate-100">New position</h2>
+              <div className="mt-1 text-[12px] text-slate-400 break-words">
+                Create a dedicated deposit address, fund with USDT (BEP-20), and receive custodied USDDD allocation tied to the protocol.
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-800/60 bg-slate-950/30 p-3">
+              <div className="flex items-start gap-3">
+                <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-1 h-4 w-4 accent-slate-200" />
+                <div className="flex-1">
+                  <div className="text-[12px] font-semibold text-slate-200">Understanding</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-400 break-words">
+                    <li>Each position uses a unique deposit address. Do not reuse old addresses.</li>
+                    <li>Send only USDT on BNB Chain (BEP-20). Other tokens/chains may be unrecoverable.</li>
+                    <li>For safety, deposits are confirmed by tx hash (receipt-verified).</li>
+                    <li>Withdrawals remain locked until admin unlock.</li>
+                  </ul>
 
                   <div className="mt-3 text-[12px] text-slate-500">By continuing, you confirm you understand the protocol terms above.</div>
                 </div>
@@ -1784,181 +1970,7 @@ export default function FundNetworkPage() {
             </div>
           </section>
 
-          {/* DB positions table */}
-          <section id="positions" className="md:col-span-12 min-w-0 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-slate-200">{bound ? "Positions (Terminal-linked)" : "Positions (saved refs)"}</h2>
 
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setHideAwaiting((v) => !v)}
-                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-                >
-                  {hideAwaiting ? "Hide Awaiting: ON" : "Hide Awaiting: OFF"}
-                </button>
-
-                <div className="text-[11px] text-slate-500">
-                  {loadingDb ? "Refreshing..." : anyWithdrawAvailable ? "Withdraw available" : "Withdraw locked"}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void hydrateDbByRefsOrSession()}
-                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-                  title="Refresh now"
-                >
-                  Refresh
-                </button>
-              </div>
-            </div>
-
-            <div className="-mx-4 md:mx-0 min-w-0 overflow-x-auto overscroll-x-contain px-4 md:px-0">
-              <table className="min-w-[860px] w-full text-[12px]">
-                <thead className="text-slate-400">
-                  <tr className="border-b border-slate-800/60">
-                    <th className="py-2 pr-4 text-left font-medium">Ref</th>
-                    <th className="py-2 pr-4 text-left font-medium">Deposit Address</th>
-                    <th className="py-2 pr-4 text-right font-medium">Funded (USDT)</th>
-                    <th className="py-2 pr-4 text-left font-medium">Deposit tx</th>
-                    <th className="py-2 pr-4 text-left font-medium">Sweep tx</th>
-                    <th className="py-2 pr-4 text-left font-medium">Gas topup</th>
-                    <th className="py-2 pr-4 text-right font-medium">Allocated (USDDD)</th>
-                    <th className="py-2 pr-4 text-right font-medium">Total (Allocated + Accrued)</th>
-                    <th className="py-2 pr-2 text-left font-medium">Stage</th>
-                    <th className="py-2 pl-2 text-right font-medium">Withdraw</th>
-                  </tr>
-                </thead>
-
-                <tbody className="text-slate-200">
-                  {visibleDbPositions.length === 0 ? (
-                    <tr>
-                      <td className="py-3 text-slate-500" colSpan={10}>
-                        No positions yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    visibleDbPositions.map((p) => {
-                      const stage = statusToStage(p.status, p.locked);
-                      const total = computeAccruedTotalUsddd(p);
-                      const isWithdrawn = String(p.status) === "withdrawn";
-                      const allocated = Number(p.usddd_allocated ?? 0);
-                      const accrued = Number(p.usddd_accrued_display ?? 0);
-                      const canWithdraw = String(p.status) === "swept_locked" && p.locked === false;
-                      const wRow = withdrawMap[p.position_ref];
-                      const hasPending = isPendingWithdrawalStatus(wRow?.status);
-
-                      return (
-                        <tr key={p.id} className="border-b border-slate-800/40 align-top">
-                          <td className="py-2 pr-4">{p.position_ref}</td>
-
-                          <td className="py-2 pr-4 font-mono break-all text-[11px] text-slate-300">
-                            {p.issued_deposit_address.slice(0, 10)}...{p.issued_deposit_address.slice(-6)}
-                          </td>
-
-                          <td className="py-2 pr-4 text-right">{Number(p.funded_usdt ?? 0) ? Number(p.funded_usdt).toFixed(2) : "--"}</td>
-
-                          <td className="py-2 pr-4">{p.deposit_tx_hash ? <TxLink hash={p.deposit_tx_hash} /> : <span className="text-slate-600">--</span>}</td>
-
-                          <td className="py-2 pr-4">{p.sweep_tx_hash ? <TxLink hash={p.sweep_tx_hash} /> : <span className="text-slate-600">--</span>}</td>
-
-                          <td className="py-2 pr-4">
-                            {p.gas_topup_tx_hash ? (
-                              <div className="text-[11px]">
-                                <TxLink hash={p.gas_topup_tx_hash} />
-                                <div className="text-slate-500">{Number(p.gas_topup_bnb ?? 0) ? `${fmtDec(Number(p.gas_topup_bnb), 6)} BNB` : ""}</div>
-                              </div>
-                            ) : (
-                              <span className="text-slate-600">--</span>
-                            )}
-                          </td>
-
-                          <td className="py-2 pr-4 text-right">{p.usddd_allocated == null ? "--" : Number(p.usddd_allocated).toFixed(2)}</td>
-
-                          <td className="py-2 pr-4 text-right">{total == null ? "--" : fmtDec(total, 4)}</td>
-
-                          <td className="py-2 pr-2">
-                            <div className="text-slate-200">{stage.title}</div>
-                            <div className="text-[11px] text-slate-500">{stage.hint}</div>
-                            <div className="text-[11px] text-slate-600">locked: {p.locked === false ? "false" : "true"}</div>
-                            <div className="text-[11px] text-slate-600">wd: {String(withdrawMap[p.position_ref]?.status ?? "—")}</div>
-                            <div className="text-[11px] text-slate-600">{wdDebug}</div>
-                          </td>
-
-                          <td className="py-2 pl-2 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {String(p.status) === "awaiting_funds" && !p.deposit_tx_hash ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setDismissModal({ open: true, ref: p.position_ref })}
-                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-                                  title="Hide this unfunded position from your list"
-                                >
-                                  Dismiss
-                                </button>
-                              ) : null}
-
-                              {isWithdrawn ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
-                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
-                                  title="View withdrawal receipt"
-                                >
-                                  Withdrawn
-                                </button>
-                              ) : hasPending ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void openWithdrawReceipt(p.position_ref)}
-                                  className="rounded-md border border-amber-900/60 bg-amber-950/30 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-950/50"
-                                  title="Withdrawal is processing / queued. Click to view status."
-                                >
-                                  Processing
-                                </button>
-                              ) : canWithdraw ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setWithdrawModal({
-                                      open: true,
-                                      ref: p.position_ref,
-                                      allocated: Number.isFinite(allocated) ? allocated : 0,
-                                      accrued: Number.isFinite(accrued) ? accrued : 0,
-                                      total:
-                                        Number.isFinite(total ?? NaN)
-                                          ? Number(total)
-                                          : (Number.isFinite(allocated) ? allocated : 0) + (Number.isFinite(accrued) ? accrued : 0),
-                                      to: "",
-                                      sid: sessionIdRef.current.trim() || "",
-                                      stage: "idle",
-                                      message: undefined,
-                                    });
-                                  }}
-                                  className="rounded-md border border-emerald-900/60 bg-emerald-950/30 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-950/50"
-                                  title="Request withdraw (session-gated)"
-                                >
-                                  Withdraw
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled
-                                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-400 opacity-70 cursor-not-allowed"
-                                >
-                                  Locked
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
         </div>
       </div>
     </main>
