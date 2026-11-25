@@ -85,7 +85,7 @@ type WithdrawalStatusRow = {
 
 const LINKS = {
   home: "/",
-  terminal: "https://digdug.do",
+  terminal: "https://www.digdug.do/legacy-terminal",
   telegram: "https://t.me/digdugdo",
   docs: "https://github.com/noblegatefze/digdug-whitepaper",
 };
