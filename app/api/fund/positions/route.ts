@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { fundAuthenticatorDatabaseAllowed, fundAuthenticatorPilotOwner } from "../../../fund/authenticator-config";
+import { createHash } from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 function env(name: string): string {
@@ -7,9 +9,13 @@ function env(name: string): string {
   return v.trim();
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const j = await req.json().catch(() => ({} as any));
+
+    if (j?.authenticator === true && !fundAuthenticatorDatabaseAllowed()) {
+      return NextResponse.json({ error: "Fund Authenticator Preview is not configured." }, { status: 503 });
+    }
 
     const session_id = typeof j?.session_id === "string" ? j.session_id.trim() : "";
     const refs: string[] = Array.isArray(j?.refs) ? j.refs.map((x: any) => String(x).trim()).filter(Boolean) : [];
@@ -45,6 +51,26 @@ export async function POST(req: Request) {
       created_at,
       terminal_user_id
     `;
+
+    if (j?.authenticator === true) {
+      const response = (body: object, status = 200) => NextResponse.json(body, {
+        status, headers: { "Cache-Control": "no-store" },
+      });
+      const pilotOwner = fundAuthenticatorPilotOwner();
+      if (!pilotOwner) return response({ error: "Fund Authenticator pilot is unavailable." }, 503);
+      const token = req.cookies.get("__Host-ussd-fund-session")?.value;
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) return response({ error: "Sign in to view your positions." }, 401);
+      const { data: session, error: sessionError } = await sb
+        .from("fund_authenticator_sessions").select("terminal_user_id")
+        .eq("token_hash", createHash("sha256").update(token).digest("hex"))
+        .gt("expires_at", new Date().toISOString()).maybeSingle();
+      if (sessionError) return response({ error: "Fund sign-in is unavailable." }, 503);
+      if (!session || session.terminal_user_id !== pilotOwner) return response({ error: "Your session has expired. Sign in again." }, 401);
+      const { data: positions, error } = await sb.from("fund_positions")
+        .select(SELECT_COLS).eq("terminal_user_id", session.terminal_user_id);
+      if (error) return response({ error: "Your positions could not be loaded." }, 503);
+      return response({ ok: true, positions: positions ?? [] });
+    }
 
     // Mode A: session_id -> resolve terminal user -> return all bound positions
     if (session_id) {
