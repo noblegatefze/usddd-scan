@@ -1452,6 +1452,7 @@ export default function FundNetworkPage() {
           <strong className="fund-eyebrow">USDDD Fund Network</strong>
           <h1>Back the Exploration</h1>
           <p>Access existing positions or open a dedicated USDT funding position.</p>
+          <a className="fund-view" href="/fund/access">Sign in with Fund Authenticator</a>
         </section>
         <div className="fund-grid">
           <section className="fund-card"><h2>{bound ? "Your positions" : "Existing positions"}</h2><p>{bound ? "Review positions and receipts linked to your Terminal account." : "Link a Legacy Terminal session to access positions from another browser."}</p><a className="fund-view" href="#positions">View positions</a></section>
