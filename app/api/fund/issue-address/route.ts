@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes, createHash, createCipheriv } from "crypto";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -26,7 +26,7 @@ function makePositionRef(): string {
   return `FN-${b}`;
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const supabaseUrl = env("SUPABASE_URL");
     const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
@@ -50,6 +50,24 @@ export async function POST() {
     }
 
 
+    let terminalUserId: string | undefined;
+    if (process.env.FUND_REQUIRE_AUTHENTICATOR === "true") {
+      const origin = process.env.FUND_AUTHENTICATOR_ORIGIN;
+      if (!origin || req.headers.get("origin") !== origin) {
+        return NextResponse.json({ ok: false, error: "Open the official Fund Network page." }, { status: 403 });
+      }
+      const token = req.cookies.get("__Host-ussd-fund-session")?.value;
+      if (!token || !/^[0-9a-f]{64}$/.test(token)) {
+        return NextResponse.json({ ok: false, error: "Set up or sign in with Fund Authenticator first." }, { status: 401 });
+      }
+      const { data: session, error: sessionError } = await sb.from("fund_authenticator_sessions")
+        .select("terminal_user_id").eq("token_hash", createHash("sha256").update(token).digest("hex"))
+        .gt("expires_at", new Date().toISOString()).maybeSingle();
+      if (sessionError) return NextResponse.json({ ok: false, error: "Fund sign-in is unavailable." }, { status: 503 });
+      if (!session) return NextResponse.json({ ok: false, error: "Sign in to Fund Network again." }, { status: 401 });
+      terminalUserId = session.terminal_user_id;
+    }
+
     // Generate dedicated EOA deposit address for this position
     const priv = generatePrivateKey();
     const acct = privateKeyToAccount(priv);
@@ -69,6 +87,7 @@ export async function POST() {
         expected_max_usdt: max,
         status: "awaiting_funds",
         locked: true,
+        ...(terminalUserId ? { terminal_user_id: terminalUserId } : {}),
       })
       .select("id, position_ref, issued_deposit_address, chain, token, expected_min_usdt, expected_max_usdt, status, created_at")
       .single();
