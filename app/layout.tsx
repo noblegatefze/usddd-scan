@@ -14,24 +14,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "USDDD Scan — Protocol Transparency",
+  title: "Flatverse Observatory | DIGDUG.DO",
   description:
-    "USDDD Scan provides live, protocol-defined transparency into network activity, value flow, and efficiency for DIGDUG.DO.",
+    "Explore the Flatverse Practice World, recent finds, and daily practice ranks.",
 
   openGraph: {
-    title: "USDDD Scan — Protocol Transparency",
+    title: "Flatverse Observatory | DIGDUG.DO",
     description:
-      "Live, protocol-defined transparency into network activity, value flow, and efficiency.",
+      "Explore the Flatverse Practice World, recent finds, and daily practice ranks.",
     url: "https://usddd.digdug.do",
-    siteName: "USDDD Scan",
+    siteName: "DIGDUG.DO",
     type: "website",
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "USDDD Scan — Protocol Transparency",
+    title: "Flatverse Observatory | DIGDUG.DO",
     description:
-      "Live, protocol-defined transparency into the DIGDUG.DO network.",
+      "Explore the Flatverse Practice World, recent finds, and daily practice ranks.",
   },
 };
 
