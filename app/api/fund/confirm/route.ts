@@ -75,7 +75,16 @@ export async function POST(req: Request) {
         .select("terminal_user_id")
         .maybeSingle();
 
-      return linked?.terminal_user_id ?? null;
+      if (linked?.terminal_user_id) return linked.terminal_user_id;
+
+      // Another request may have linked the position after our initial read.
+      const { data: current } = await sb
+        .from("fund_positions")
+        .select("terminal_user_id")
+        .eq("id", positionId)
+        .maybeSingle();
+
+      return current?.terminal_user_id ?? null;
     }
 
     // Do not overwrite an existing deposit or its owner.
