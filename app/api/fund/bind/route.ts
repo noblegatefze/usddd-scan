@@ -38,11 +38,12 @@ export async function POST(req: Request) {
     if (sessErr || !sess) throw new Error("Session not found");
     if (!sess.user_id) throw new Error("Session has no user_id");
 
-    // bind only the provided refs
+    // Keep existing owners and allow an idempotent retry by the same account.
     const { data: upd, error: updErr } = await sb
       .from("fund_positions")
       .update({ terminal_user_id: sess.user_id })
       .in("position_ref", refs)
+      .or(`terminal_user_id.is.null,terminal_user_id.eq.${sess.user_id}`)
       .select("position_ref");
 
     if (updErr) throw updErr;
