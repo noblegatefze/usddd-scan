@@ -1015,12 +1015,18 @@ export default function FundNetworkPage() {
             <span className="text-slate-600">·</span>
             <span>Build: {meta?.build ?? "--"}</span>
 
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Link href={LINKS.home} className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
-                Back to Scan
+            <nav aria-label="Fund Network navigation" className="ml-auto flex flex-wrap items-center gap-2">
+              <Link href="/observatory" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
+                Observatory
+              </Link>
+              <a href="https://play.digdug.do/" className="rounded-md border border-cyan-900/70 bg-cyan-950/40 px-2 py-1 text-[11px] text-cyan-100 hover:bg-cyan-950/70">
+                Play Flatverse
+              </a>
+              <Link href="/zero-phase-archive" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
+                Zero Phase Archive
               </Link>
               <a href={LINKS.terminal} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
-                Open Terminal
+                Legacy Terminal
               </a>
               <a href={LINKS.telegram} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
                 Telegram
@@ -1028,7 +1034,7 @@ export default function FundNetworkPage() {
               <a href={LINKS.docs} target="_blank" rel="noreferrer" className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70">
                 Docs
               </a>
-            </div>
+            </nav>
           </div>
         </div>
 
