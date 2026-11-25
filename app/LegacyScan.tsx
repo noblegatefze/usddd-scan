@@ -1,0 +1,1668 @@
+﻿"use client";
+
+import Image from "next/image";
+import React, { useEffect, useState } from "react";
+import { getPublicFlags } from "./lib/flags";
+import { ScanMaintenance } from "./_maintenance/ScanMaintenance";
+
+type ActivityResp = {
+  window: { start: string; end: string; hours: number };
+  counts: {
+    claims: number;
+    unique_claimers: number;
+    ledger_entries: number;
+    claim_reserves: number;
+  };
+  money?: {
+    claims_value_usd: number;
+    usddd_spent: number;
+  };
+  warnings?: Array<{ scope: string; message: string }>;
+  schema_assumption?: { timestamp_column?: string };
+};
+
+type GoldenFindRow = {
+  ts: string | null;
+  claim: string | null;
+  winner: string;
+  token: string | null;
+  chain: string | null;
+  usd: number;
+};
+
+type BoxBalanceRow = {
+  box: string;
+  cmc_id?: number | null;
+  deposited: number;
+  claimed: number;
+  withdrawn: number;
+  remaining: number;
+};
+
+type GoldenWinnersRow = {
+  winner: string;
+  wins: number;
+  usd_total: number;
+};
+
+type BuildMeta = {
+  version: string;
+  build: string;
+  deployed_at: string;
+};
+
+type ActivityWindow = 1 | 6 | 24;
+
+function ActivityWindowPills({
+  value,
+  onChange,
+  className = "",
+}: {
+  value: ActivityWindow;
+  onChange: (v: ActivityWindow) => void;
+  className?: string;
+}) {
+  const Pill = ({ v }: { v: ActivityWindow }) => {
+    const active = value === v;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(v)}
+        className={[
+          "rounded-md px-2 py-1 text-[11px] font-semibold transition",
+          active
+            ? "border border-amber-900/40 bg-amber-950/20 text-amber-200"
+            : "border border-slate-800 bg-slate-950/40 text-slate-300 hover:bg-slate-950/70",
+        ].join(" ")}
+        title={`View ${v}h`}
+      >
+        {v}h
+      </button>
+    );
+  };
+
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <Pill v={1} />
+      <Pill v={6} />
+      <Pill v={24} />
+    </div>
+  );
+}
+
+function fmt(n: number) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
+}
+
+function fmtDec(n: number) {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+function fmtUsd(n: number) {
+  return `$${new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)}`;
+}
+
+function relTime(ts: string | null) {
+  if (!ts) return "-";
+  const t = new Date(ts).getTime();
+  const now = Date.now();
+  const s = Math.max(0, Math.floor((now - t) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+
+const LINKS = {
+  terminal: "https://digdug.do",
+  telegram: "https://t.me/digdugdo",
+  docs: "https://github.com/noblegatefze/digdug-whitepaper",
+};
+
+function getErrMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return "Failed to load";
+  }
+}
+
+function readJsonError(json: unknown, fallback: string): string {
+  if (json && typeof json === "object" && "error" in json) {
+    const v = (json as { error?: unknown }).error;
+    if (typeof v === "string" && v.trim()) return v;
+  }
+  return fallback;
+}
+
+function msUntilNextUtcReset(now = new Date()): number {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  const next = new Date(Date.UTC(y, m, d + 1, 0, 0, 0, 0));
+  return Math.max(0, next.getTime() - now.getTime());
+}
+
+function formatHMS(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const rem = total % 3600;
+  const min = Math.floor(rem / 60);
+  const sec = rem % 60;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function GoldenPulsePills({ className = "" }: { className?: string }) {
+  const [goldenTxt, setGoldenTxt] = React.useState<string>("-");
+  const [utcResetTxt, setUtcResetTxt] = React.useState<string>("-"); // avoid hydration mismatch
+
+  React.useEffect(() => {
+    const tick = () => setUtcResetTxt(formatHMS(msUntilNextUtcReset()));
+    tick();
+    const t = setInterval(tick, 60000);
+
+    return () => clearInterval(t);
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/golden/today");
+        const json: any = await res.json();
+        if (!res.ok || !json?.ok) return;
+        const count = Number(json?.count ?? 0);
+        const cap = Number(json?.cap ?? 5);
+        if (!Number.isFinite(count) || !Number.isFinite(cap) || cap <= 0) return;
+        if (!cancelled) setGoldenTxt(`${count}/${cap}`);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <span className="rounded-md border border-amber-900/40 bg-amber-950/20 px-2 py-1 text-[11px] text-amber-200">
+        Golden today: <span className="font-semibold">{goldenTxt}</span>
+      </span>
+      <span className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300">
+        UTC reset in: <span className="font-semibold text-slate-200">{utcResetTxt}</span>
+      </span>
+    </div>
+  );
+}
+
+function NetworkActivityCard({
+  refreshTick,
+  windowHours,
+  isGoldenHour = false,
+}: {
+  refreshTick: number;
+  windowHours: ActivityWindow;
+  isGoldenHour?: boolean;
+}) {
+  const [data, setData] = React.useState<any>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const lastWindowRef = React.useRef<ActivityWindow | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setErr(null);
+
+        const wantRefresh = lastWindowRef.current !== windowHours;
+        lastWindowRef.current = windowHours;
+
+        const refresh = wantRefresh ? "?refresh=1" : "";
+        const res = await fetch(`/api/activity/${windowHours}h${refresh}`, { cache: "no-store" });
+        const j: any = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(readJsonError(j, `HTTP ${res.status}`));
+        if (!j?.ok) throw new Error(readJsonError(j, "bad_response"));
+
+        // Your activity endpoints return { ok, row } now.
+        const row = j?.row ?? {};
+        // ---- Network performance (derived, capped) ----
+        // ---- Network performance (derived from applied accrual, capped) ----
+        const perfCap = 99.78;
+        const floorPerf: number = 10;
+        const capPerf: number = 25;
+
+        const effNow = Number(j?.model?.reward_efficiency_usd_per_usddd ?? row.reward_efficiency ?? 0) || 0;
+        const appliedPerf = Math.max(floorPerf, Math.min(effNow * 3, capPerf));
+        const perfRaw = ((appliedPerf - floorPerf) / (capPerf - floorPerf)) * 100;
+        const perfPct = Math.max(0, Math.min(perfRaw, perfCap));
+
+        // Normalize into the legacy card shape you already render against.
+        const normalized = {
+          ...j,
+          windowHours,
+          counts: {
+            sessions: Number(row.sessions ?? 0),
+            protocol_actions: Number(row.protocol_actions ?? 0),
+            claims_executed: Number(row.claims_executed ?? 0),
+            claim_reserves: Number(row.claims_executed ?? 0),
+            unique_claimers: Number(row.unique_claimers ?? 0),
+            ledger_entries: Number(row.protocol_actions ?? 0),
+            golden_events: Number(row.golden_events ?? 0),
+            terminal_users: Number(row.terminal_users ?? 0),
+          },
+          money: {
+            usddd_spent: Number(row.usddd_spent ?? 0),
+            claims_value_usd: Number(row.claims_value_usd ?? 0),
+          },
+          model: {
+            reward_efficiency_usd_per_usddd: Number(j?.model?.reward_efficiency_usd_per_usddd ?? row.reward_efficiency ?? 0),
+            reward_efficiency_prev_usd_per_usddd: Number(j?.model?.reward_efficiency_prev_usd_per_usddd ?? 0),
+            efficiency_delta_usd_per_usddd: Number(j?.model?.efficiency_delta_usd_per_usddd ?? 0),
+
+            accrual_scaling_pct: 3,
+            accrual_floor_pct: 10,
+            accrual_cap_pct: 25,
+            accrual_potential_pct: Number(row.reward_efficiency ?? 0) * 3,
+            applied_accrual_pct: Math.max(10, Math.min(Number(row.reward_efficiency ?? 0) * 3, 25)),
+
+            network_performance_cap_pct: perfCap,
+            network_performance_pct: perfPct,
+            network_performance_display_pct: perfPct,
+
+          },
+        };
+
+        if (!cancelled) setData(normalized);
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick, windowHours]);
+
+  const fmtPct2 = (n: number) => `${(Number.isFinite(n) ? n : 0).toFixed(2)}%`;
+  const fmtSigned = (n: number) => {
+    const v = Number.isFinite(n) ? n : 0;
+    const sign = v > 0 ? "+" : "";
+    return `${sign}${v.toFixed(3)}`;
+  };
+
+  if (err) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-[13px] text-red-200">
+        Failed to load activity: {err}
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[13px] text-slate-300">
+        Loading activity…
+      </div>
+    );
+  }
+
+  const hours = data.windowHours as ActivityWindow;
+  const c = data.counts ?? {};
+  const m = data.money ?? { claims_value_usd: 0, usddd_spent: 0 };
+  const model = data.model ?? {};
+
+  const rewardEff = Number(model.reward_efficiency_usd_per_usddd ?? 0) || 0;
+  const accrualPotential = Number(model.accrual_potential_pct ?? 0) || 0;
+  const netPerf = Number(model.network_performance_display_pct ?? model.network_performance_pct ?? 0) || 0;
+  const effDelta = Number(model.efficiency_delta_usd_per_usddd ?? 0) || 0;
+
+  const perfTone = netPerf >= 80 ? "text-emerald-300" : netPerf >= 55 ? "text-slate-200" : "text-amber-300";
+  const deltaTone =
+    effDelta > 0 ? "text-emerald-300" : effDelta < 0 ? "text-amber-300" : "text-slate-200";
+
+  const tileShell = isGoldenHour
+    ? "border border-amber-500/40 bg-amber-950/10"
+    : "border border-slate-800/60 bg-slate-950/40";
+
+  const Tile = ({
+    title,
+    desc,
+    value,
+    valueClassName,
+  }: {
+    title: string;
+    desc: string;
+    value: React.ReactNode;
+    valueClassName?: string;
+  }) => (
+    <div className={`rounded-lg p-3 ${tileShell}`}>
+      <div className="text-[12px] text-slate-200">{title}</div>
+      <div className={`mt-1 text-base font-semibold ${valueClassName ?? ""}`}>{value}</div>
+      <div className="mt-1 text-[11px] leading-snug text-slate-500">{desc}</div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[13px]">
+        <Tile title={`Protocol Actions (${hours}h)`} desc="Total protocol operations processed." value={fmt(c.protocol_actions ?? 0)} />
+        <Tile title={`Sessions (${hours}h)`} desc="Session starts recorded by the protocol." value={fmt(c.sessions ?? 0)} />
+        <Tile title={`Claims Executed (${hours}h)`} desc="Successful claim executions." value={fmt(c.claims_executed ?? 0)} />
+
+        <Tile title={`USDDD Utilized (${hours}h)`} desc="USDDD consumed by protocol activity." value={fmtDec(m.usddd_spent ?? 0)} />
+        <Tile title={`Value Distributed (${hours}h)`} desc="USD value distributed by the protocol." value={fmtUsd(m.claims_value_usd ?? 0)} />
+        <Tile
+          title={`Reward Efficiency (${hours}h)`}
+          desc="USD value per 1 USDDD utilized."
+          value={
+            <span>
+              {fmtUsd(rewardEff)} <span className="text-[12px] text-slate-400">/ USDDD</span>
+            </span>
+          }
+        />
+
+        <Tile title="Accrual Potential" desc="Derived from efficiency (× 3%)." value={fmtPct2(accrualPotential)} />
+        <Tile title="Network Performance" desc="Efficiency normalized to protocol scale." value={fmtPct2(netPerf)} valueClassName={perfTone} />
+        <Tile
+          title={`Efficiency Delta (${hours}h)`}
+          desc={`Change vs previous ${hours}h efficiency.`}
+          value={
+            <span>
+              {fmtSigned(effDelta)} <span className="text-[12px] text-slate-400">$/USDDD</span>
+            </span>
+          }
+          valueClassName={deltaTone}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <div className="text-[11px] text-slate-500">Accrual figures are protocol-defined and observational.</div>
+        <button
+          type="button"
+          onClick={() => (window as any).__openScanModal?.("fund")}
+          className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+          title="Fund the network"
+        >
+          Fund Network
+        </button>
+      </div>
+
+      {data.warnings &&
+        Array.isArray(data.warnings) &&
+        data.warnings.some((w: any) => (w?.message ?? "").trim().length) && (
+          <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3 text-[12px] text-amber-200">
+            <div className="font-semibold text-amber-200/90">Warnings</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {data.warnings
+                .filter((w: any) => (w?.message ?? "").trim().length)
+                .map((w: any, i: number) => (
+                  <li key={i}>
+                    <span className="text-amber-200/70">{w.scope}:</span> {w.message}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
+    </div>
+  );
+}
+
+function LatestGoldenFindsTable({
+  refreshTick,
+  onOpenPayout,
+}: {
+  refreshTick: number;
+  onOpenPayout: (claim: string | null | undefined) => void;
+}) {
+  const [rows, setRows] = React.useState<GoldenFindRow[]>([]);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/golden-finds/latest?limit=10");
+        const json: unknown = await res.json();
+        if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
+        const dataRows =
+          json && typeof json === "object" && "rows" in json
+            ? (((json as { rows?: unknown }).rows ?? []) as GoldenFindRow[])
+            : ([] as GoldenFindRow[]);
+        if (!cancelled) setRows(dataRows);
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
+  if (err) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-[13px] text-red-200">
+        Failed to load golden finds: {err}
+      </div>
+    );
+  }
+
+  return (
+    <div className="-mx-4 overflow-hidden">
+      <div className="px-4">
+        <table className="w-full table-fixed text-left text-[13px]">
+          <thead className="text-[11px] uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-slate-800/60">
+              <th className="w-[72px] py-2 pr-2">Time</th>
+              <th className="w-[96px] py-2 pr-2">Claim</th>
+              <th className="py-2 pr-2">Winner</th>
+              <th className="hidden sm:table-cell w-[90px] py-2 pr-2">Token</th>
+              <th className="w-[64px] py-2 text-right">USD</th>
+            </tr>
+          </thead>
+
+          <tbody className="text-slate-200">
+            {rows.length === 0 ? (
+              <tr className="border-b border-slate-800/40">
+                <td className="py-3 text-slate-400" colSpan={5}>
+                  Loading…
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => (
+                <tr key={r.claim ?? `${r.ts}-${r.token}`} className="border-b border-slate-800/40">
+                  <td className="py-2 pr-2 text-slate-300">{relTime(r.ts)}</td>
+                  <td className="py-2 pr-2 font-mono text-slate-200 truncate">{r.claim ?? "-"}</td>
+                  <td className="py-2 pr-2 truncate">{r.winner}</td>
+                  <td className="hidden sm:table-cell py-2 pr-2 truncate">{r.token ?? "-"}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    <button
+                      type="button"
+                      onClick={() => onOpenPayout(r.claim)}
+                      className="inline-flex items-center justify-end gap-1 underline underline-offset-2 decoration-slate-700 hover:decoration-slate-300"
+                      title="View payout"
+                    >
+                      {fmtUsd(r.usd ?? 0)}
+                      <span className="text-[11px] text-slate-500">↗</span>
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function BoxBalancesTable({ refreshTick }: { refreshTick: number }) {
+  const [rows, setRows] = React.useState<BoxBalanceRow[]>([]);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/boxes/balances?limit=10");
+        const json: unknown = await res.json();
+        if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
+        const dataRows =
+          json && typeof json === "object" && "rows" in json
+            ? (((json as { rows?: unknown }).rows ?? []) as BoxBalanceRow[])
+            : ([] as BoxBalanceRow[]);
+        if (!cancelled) setRows(dataRows);
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
+  if (err) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-[13px] text-red-200">
+        Failed to load box balances: {err}
+      </div>
+    );
+  }
+
+  return (
+    <div className="-mx-4 overflow-hidden">
+      <div className="px-4">
+        <table className="w-full table-fixed text-left text-[13px]">
+          <thead className="text-[11px] uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-slate-800/60">
+              <th className="w-[90px] py-2 pr-2">Box</th>
+              <th className="hidden sm:table-cell w-[90px] py-2 pr-2 text-right">Deposited</th>
+              <th className="hidden sm:table-cell w-[90px] py-2 pr-2 text-right">Claimed</th>
+              <th className="hidden md:table-cell w-[90px] py-2 pr-2 text-right">Withdrawn</th>
+              <th className="w-[88px] py-2 text-right">Remaining</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.length === 0 ? (
+              <tr className="border-b border-slate-800/40">
+                <td className="py-3 text-slate-400" colSpan={5}>
+                  Loading…
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => (
+                <tr key={r.box} className="border-b border-slate-800/40">
+                  <td className="py-2 pr-2 font-mono truncate text-slate-200">{r.box}</td>
+                  <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.deposited)}</td>
+                  <td className="hidden sm:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.claimed)}</td>
+                  <td className="hidden md:table-cell py-2 pr-2 text-right text-slate-300">{fmtDec(r.withdrawn)}</td>
+                  <td className="py-2 text-right tabular-nums">{fmtDec(r.remaining)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+
+        <div className="mt-2 text-[11px] text-slate-500 sm:hidden">
+          Showing: Box + Remaining (expand on desktop for full columns)
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoldenWinnersLeaderboard({ refreshTick }: { refreshTick: number }) {
+  const [rows, setRows] = React.useState<GoldenWinnersRow[]>([]);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/leaderboards/golden-winners?limit=5");
+        const json: unknown = await res.json();
+        if (!res.ok) throw new Error(readJsonError(json, `HTTP ${res.status}`));
+        const dataRows =
+          json && typeof json === "object" && "rows" in json
+            ? (((json as { rows?: unknown }).rows ?? []) as GoldenWinnersRow[])
+            : ([] as GoldenWinnersRow[]);
+        if (!cancelled) setRows(dataRows);
+      } catch (e: unknown) {
+        if (!cancelled) setErr(getErrMsg(e));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
+  if (err) {
+    return (
+      <div className="mt-2 rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-[12px] text-red-200">
+        Failed to load: {err}
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return <div className="mt-2 text-[12px] text-slate-400">Loading…</div>;
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      {rows.map((r, idx) => (
+        <div
+          key={`${r.winner}-${idx}`}
+          className="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[13px]"
+        >
+          <div className="min-w-0">
+            <div className="truncate text-slate-200">
+              <span className="text-slate-500">{idx + 1}.</span> {r.winner}
+            </div>
+            <div className="mt-1 text-[12px] text-slate-400">Wins: {fmt(r.wins)}</div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="font-semibold text-slate-200">{fmtUsd(r.usd_total)}</div>
+            <div className="text-[11px] text-slate-500">30d</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ScanModal({
+  open,
+  title,
+  children,
+  primaryLabel,
+  primaryHref,
+  primaryNewTab = true,
+  secondaryLabel = "Close",
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  children: React.ReactNode;
+  primaryLabel?: string;
+  primaryHref?: string;
+  primaryNewTab?: boolean;
+  secondaryLabel?: string;
+  onClose: () => void;
+}) {
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-xl border border-slate-800/70 bg-[#0b0f14]/95 p-4 shadow-xl max-h-[90vh] overflow-hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="text-sm font-semibold text-slate-100">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Only the body scrolls */}
+        <div className="mt-3 max-h-[70vh] overflow-y-auto text-[12px] leading-relaxed text-slate-300 pr-1">
+          {children}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+          >
+            {secondaryLabel}
+          </button>
+
+          {primaryLabel && primaryHref ? (
+            <a
+              href={primaryHref}
+              {...(primaryNewTab ? { target: "_blank", rel: "noreferrer" } : {})}
+              className="rounded-md border border-emerald-900/60 bg-emerald-950/40 px-3 py-2 text-[12px] text-emerald-200 hover:bg-emerald-950/60"
+            >
+              {primaryLabel}
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+}
+
+type PayoutInfo = {
+  ok: boolean;
+  claim_code: string;
+  token: string | null;
+  chain: string | null;
+  usd_value: number | string | null;
+  golden_at: string | null;
+
+  status: "PAID" | "PENDING" | "UNCLAIMED";
+  claimed_at: string | null;
+
+  payout_from: string | null;
+  payout_to: string | null;
+
+  paid_at: string | null;
+  paid_tx_hash: string | null;
+};
+
+function maskAddr(a: string | null | undefined) {
+  const s = (a ?? "").trim();
+  if (!s) return "-";
+  if (s.length <= 14) return s;
+  return `${s.slice(0, 6)}…${s.slice(-4)}`;
+}
+
+function fmtTs(ts: string | null | undefined) {
+  if (!ts) return "-";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return ts;
+  return d.toISOString().replace("T", " ").replace("Z", " UTC");
+}
+
+function StatusPill({ status }: { status: PayoutInfo["status"] }) {
+  const base = "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold";
+  if (status === "PAID")
+    return <span className={`${base} border-emerald-500/30 bg-emerald-950/30 text-emerald-200`}>PAID</span>;
+  if (status === "PENDING")
+    return <span className={`${base} border-amber-500/30 bg-amber-950/20 text-amber-200`}>PENDING</span>;
+  return <span className={`${base} border-slate-700 bg-slate-900/40 text-slate-300`}>UNCLAIMED</span>;
+}
+
+function PayoutModalBody({
+  claim,
+  terminalHref,
+}: {
+  claim: string | null;
+  terminalHref: string;
+}) {
+  const [data, setData] = React.useState<PayoutInfo | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!claim) return;
+      setLoading(true);
+      setErr(null);
+      try {
+        const res = await fetch(`/api/golden-finds/payment?claim=${encodeURIComponent(claim)}`);
+        const json: any = await res.json();
+        if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+        if (!cancelled) setData(json as PayoutInfo);
+      } catch (e: any) {
+        if (!cancelled) setErr(String(e?.message ?? e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [claim]);
+
+  if (!claim) {
+    return <div className="text-[13px] text-slate-400">No claim selected.</div>;
+  }
+
+  if (loading && !data) {
+    return <div className="text-[13px] text-slate-400">Loading payout…</div>;
+  }
+
+  if (err) {
+    return (
+      <div className="rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-[13px] text-red-200">
+        Failed to load payout: {err}
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const tx = (data.paid_tx_hash ?? "").trim();
+  const bscTx = tx ? `https://bscscan.com/tx/${tx}` : null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[13px] text-slate-300">
+          <span className="font-mono text-slate-200">{data.claim_code}</span>{" "}
+          <span className="text-slate-500">•</span>{" "}
+          <span className="text-slate-200">{data.token ?? "-"}</span>{" "}
+          <span className="text-slate-500">•</span>{" "}
+          <span className="tabular-nums text-slate-200">{fmtUsd(Number(data.usd_value ?? 0))}</span>
+        </div>
+        <StatusPill status={data.status} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">From</div>
+          <div className="mt-1 font-mono text-[13px] text-slate-200" title={data.payout_from ?? ""}>
+            {maskAddr(data.payout_from)}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">To</div>
+          <div className="mt-1 font-mono text-[13px] text-slate-200" title={data.payout_to ?? ""}>
+            {maskAddr(data.payout_to)}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-800/70 bg-slate-950/40 p-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Paid at</div>
+            <div className="mt-1 text-[13px] text-slate-200">{fmtTs(data.paid_at)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">Tx hash</div>
+            <div className="mt-1 font-mono text-[13px] break-all text-slate-200">{tx || "-"}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <a
+          href={bscTx ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          className={`rounded-lg px-3 py-2 text-[12px] font-semibold ${bscTx ? "bg-slate-200 text-slate-950 hover:bg-white" : "bg-slate-800 text-slate-500 cursor-not-allowed"
+            }`}
+          aria-disabled={!bscTx}
+          onClick={(e) => {
+            if (!bscTx) e.preventDefault();
+          }}
+        >
+          Open on BscScan ↗
+        </a>
+
+        <a
+          href={terminalHref}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-lg border border-slate-800 bg-transparent px-3 py-2 text-[12px] text-slate-200 hover:border-slate-700 hover:bg-slate-900/30"
+        >
+          Open Terminal ↗
+        </a>
+      </div>
+
+      <div className="text-[12px] text-slate-500">
+        Note: BscScan shows the on-chain sender/recipient details. This modal reflects what was recorded in Phase Zero.
+      </div>
+    </div>
+  );
+}
+
+export default function Home() {
+  const [paused, setPaused] = useState(false);
+
+  // Network Activity window selector (1h / 6h / 24h)
+  const [activityWindow, setActivityWindow] = React.useState<ActivityWindow>(24);
+  // Golden hour status (drives gold borders)
+  const [goldenActive, setGoldenActive] = React.useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const flags = await getPublicFlags();
+      if (!alive) return;
+      setPaused(Boolean(flags?.pause_all));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const [meta, setMeta] = React.useState<BuildMeta | null>(null);
+
+  type ModalKey =
+    | "fund"
+    | "sponsor"
+    | "boxes"
+    | "activity"
+    | "testnet"
+    | "golden"
+    | "search"
+    | "payout"
+    | "airdrop";
+
+  const [modal, setModal] = React.useState<{ open: boolean; key: ModalKey | null }>({
+    open: false,
+    key: null,
+  });
+
+  const openModal = (key: ModalKey) => setModal({ open: true, key });
+  const closeModal = () => setModal({ open: false, key: null });
+
+  const [payoutClaim, setPayoutClaim] = React.useState<string | null>(null);
+
+  const openPayout = (claim: string | null | undefined) => {
+    const c = (claim ?? "").trim();
+    if (!c) return;
+    setPayoutClaim(c);
+    openModal("payout");
+  };
+
+  const [refreshTick, setRefreshTick] = React.useState(0);
+
+  // === USDDD Airdrop (Trust Wallet verification) ===
+  const AIRDROP_TARGET = 10000;
+  const AIRDROP_HOURS = 48;
+
+  const [airdropStartMs] = React.useState<number>(() => Date.now());
+
+  const [airdropCount, setAirdropCount] = React.useState<number>(0);
+  const [airdropLatest, setAirdropLatest] = React.useState<string[]>([]);
+  const [airdropAddr, setAirdropAddr] = React.useState<string>("");
+  const [airdropMsg, setAirdropMsg] = React.useState<string | null>(null);
+  const [airdropSubmitting, setAirdropSubmitting] = React.useState<boolean>(false);
+
+  const AIRDROP_COMPLETE = airdropCount >= AIRDROP_TARGET;
+
+  React.useEffect(() => {
+    if (!(modal.open && modal.key === "airdrop")) return;
+
+    let alive = true;
+
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/airdrop/stats?limit=30", { cache: "no-store" });
+        const json: any = await res.json();
+        if (!alive) return;
+        if (res.ok && json?.ok) {
+          setAirdropCount(Number(json.count ?? 0));
+          setAirdropLatest(Array.isArray(json.latest) ? json.latest : []);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [modal.open, modal.key]);
+
+  React.useEffect(() => {
+    const t = setInterval(() => setRefreshTick((v) => v + 1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  React.useEffect(() => {
+    let alive = true;
+
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/golden/window-status", { cache: "no-store" });
+        const json: any = await res.json().catch(() => null);
+        if (!alive) return;
+        if (res.ok && json?.ok) {
+          setGoldenActive(Boolean(json.active));
+        }
+      } catch {
+        if (alive) setGoldenActive(false);
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 10000); // every 10s
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  function airdropRemainingMs() {
+    const end = airdropStartMs + AIRDROP_HOURS * 3600 * 1000;
+    return Math.max(0, end - Date.now());
+  }
+
+  async function submitAirdrop() {
+    setAirdropMsg(null);
+    setAirdropSubmitting(true);
+    try {
+      const res = await fetch("/api/airdrop/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          address: airdropAddr,
+          source: "usddd_scan_modal",
+        }),
+      });
+
+      const json: any = await res.json();
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+
+      setAirdropMsg(json.already ? "Already registered. You’re in." : "Registered. You’re in.");
+      setAirdropAddr("");
+
+      const s = await fetch("/api/airdrop/stats?limit=30", { cache: "no-store" });
+      const sj: any = await s.json();
+      if (s.ok && sj?.ok) {
+        setAirdropCount(Number(sj.count ?? 0));
+        setAirdropLatest(Array.isArray(sj.latest) ? sj.latest : []);
+      }
+    } catch (e: any) {
+      setAirdropMsg(String(e?.message ?? e));
+    } finally {
+      setAirdropSubmitting(false);
+    }
+  }
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/meta/build");
+        const json: unknown = await res.json();
+        if (!cancelled && json && typeof json === "object") {
+          setMeta(json as BuildMeta);
+        }
+      } catch {
+        // ignore meta errors
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    (window as any).__openScanModal = (key: ModalKey) => openModal(key);
+    return () => {
+      try {
+        delete (window as any).__openScanModal;
+      } catch {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return paused ? (
+    <ScanMaintenance />
+  ) : (
+    <main className="min-h-screen bg-[#0b0f14] text-slate-200">
+      <header className="sticky top-0 z-50 border-b border-slate-800/60 bg-[#0b0f14]/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
+          <a
+            href="https://usddd.digdug.do"
+            className="flex items-center gap-2 hover:opacity-90"
+            title="Back to Flatverse Observatory"
+          >
+            <div className="relative h-7 w-7 overflow-hidden rounded-full border border-slate-800 bg-slate-950/40">
+              <Image src="/logo.png" alt="USDDD" fill sizes="28px" className="object-cover" />
+            </div>
+            <div className="leading-tight">
+              <div className="text-sm font-semibold tracking-wide">Zero Phase Archive</div>
+              <div className="text-[11px] text-slate-400">powered by DIGDUG.DO</div>
+            </div>
+          </a>
+
+          <div className="hidden md:flex flex-1 justify-center">
+            <div className="relative w-[520px]">
+              <div className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
+                Search claim code / box / user…
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openModal("search")}
+                className="absolute inset-0 rounded-md"
+                aria-label="Open quick-start"
+                title="Open quick-start"
+              />
+            </div>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => openModal("testnet")}
+              className="rounded-full border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-950/60"
+              title="About Testnet"
+            >
+              Testnet
+            </button>
+            <span className="rounded-full border border-emerald-900/60 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-300 animate-pulse">
+              LIVE
+            </span>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-800/40">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[12px] text-slate-400">
+            <span>Phase: Zero</span>
+            <span className="text-slate-600">·</span>
+            <span>Version: {meta?.version ?? "--"}</span>
+            <span className="text-slate-600">·</span>
+            <span>Build: {meta?.build ?? "--"}</span>
+
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <a
+                href={LINKS.terminal}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Open Terminal
+              </a>
+              <a
+                href={LINKS.telegram}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Telegram
+              </a>
+              <a
+                href={LINKS.docs}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Docs
+              </a>
+
+              <button
+                type="button"
+                onClick={() => openModal("airdrop")}
+                className="relative rounded-md border border-orange-400/60 bg-orange-950/25 px-2 py-1 text-[11px] font-semibold text-orange-100 hover:bg-orange-950/35"
+                title="USDDD Airdrop"
+              >
+                <span className="pointer-events-none absolute -inset-1 rounded-md bg-orange-500/15 blur-sm animate-pulse" />
+                <span className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-orange-300/20" />
+                <span className="relative">USDDD Airdrop</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="md:hidden border-t border-slate-800/40 px-4 py-2">
+          <div className="relative w-full">
+            <div className="w-full rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[13px] text-slate-300">
+              Search claim code / box / user…
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openModal("search")}
+              className="absolute inset-0 rounded-md"
+              aria-label="Open quick-start"
+              title="Open quick-start"
+            />
+          </div>
+          <div className="mt-2 flex justify-between">
+            <GoldenPulsePills />
+          </div>
+        </div>
+      </header>
+
+      <ScanModal open={modal.open && modal.key === "payout"} title="Phase Zero Golden Find Payout" onClose={closeModal}>
+        <PayoutModalBody claim={payoutClaim} terminalHref={LINKS.terminal} />
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "testnet"}
+        title="Zero Phase Testnet"
+        onClose={closeModal}
+        primaryLabel="Join Telegram"
+        primaryHref={LINKS.telegram}
+      >
+        <div className="space-y-3">
+          <p>
+            You're viewing the public Zero Phase testnet. Real users are actively exercising the protocol while we monitor network activity,
+            tighten rules, and eliminate broken flows.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">What's real right now</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>Live network activity and telemetry on Scan.</li>
+              <li>Protocol actions and claim execution paths.</li>
+              <li>
+                <span className="font-semibold">Golden Finds</span> funded by protocol/sponsors.
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-slate-400">
+            Most rewards in testnet are mock for testing. Genesis Phase is the mainnet transition where reward rules become final and funding expands.
+          </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "fund"}
+        title="Fund Network"
+        onClose={closeModal}
+        primaryLabel="Fund Network"
+        primaryHref="https://usddd.digdug.do/fund"
+        primaryNewTab={false}
+      >
+        <div className="space-y-3">
+          <p>
+            Funding the network means you provision USDT (BEP-20) into the protocol's funding layer. In return, the protocol allocates custodied
+            USDDD tied to network performance and the current Accrual Reference.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Benefits</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>Dedicated deposit address per position (traceable and auditable).</li>
+              <li>Custodied USDDD allocation tracked and surfaced on Scan.</li>
+              <li>Accrual is protocol-defined and observable (no hidden calculations).</li>
+            </ul>
+          </div>
+
+          <p className="text-slate-400">
+            Withdrawals remain locked during Zero Phase while we harden the system. Genesis unlock rules will be announced in Docs and Telegram.
+          </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "sponsor"}
+        title="Become a Sponsor"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p className="text-slate-300">
+            Sponsor boxes deploy rewards to the network and surface publicly on Scan. Full sponsor guide coming next.
+          </p>
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            Terminal command: <span className="font-mono text-slate-200">create box</span>
+          </div>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "boxes"}
+        title="View all boxes"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p className="text-slate-300">
+            Box Balances live in the Terminal. Browse sponsor boxes and inventories in Terminal.
+          </p>
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            Terminal command: <span className="font-mono text-slate-200">dig</span> - choose{" "}
+            <span className="font-mono text-slate-200">Treasure (2)</span>
+          </div>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "golden"}
+        title="Golden Finds"
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p>
+            Golden Finds are the network's limited daily wins - rare, time-based rewards that appear inside the DIG flow. When a Golden Find is hit,
+            it's recorded publicly here on Scan.
+          </p>
+
+          <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 p-3">
+            <div className="text-[12px] font-semibold text-amber-200">How to hunt Golden Finds</div>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-[12px] text-amber-100/90">
+              <li>Open the Terminal.</li>
+              <li>
+                Type: <span className="font-mono text-amber-50">dig</span>
+              </li>
+              <li>Follow the prompts and watch for Golden activity.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+            <div className="font-semibold text-slate-200">Where updates happen</div>
+            <div className="mt-1 text-slate-400">
+              Live drops, rules, and announcements are posted in Telegram as we tune the protocol through Zero Phase.
+            </div>
+          </div>
+
+          <p className="text-slate-400">
+            Tip: Golden Finds are capped daily (see 'Golden today' at the top). If you want to stay ahead of the wave, keep Scan open and join Telegram.
+          </p>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "search"}
+        title="Don't search. DIG."
+        onClose={closeModal}
+        primaryLabel="Open Terminal"
+        primaryHref={LINKS.terminal}
+      >
+        <div className="space-y-3">
+          <p>
+            This is a live protocol surface - not a directory. The fastest way to understand USDDD is to interact with it: DIG, sponsor boxes, or fund the
+            network.
+          </p>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Three ways to join the network</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-slate-300">
+              <li>
+                <span className="font-semibold text-slate-200">DIG</span> for rewards in the Terminal.
+                <span className="ml-2 font-mono text-slate-200">dig</span>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-200">Sponsor</span> a box and deploy rewards publicly on Scan.
+                <span className="ml-2 font-mono text-slate-200">create box</span>
+              </li>
+              <li>
+                <span className="font-semibold text-slate-200">Fund</span> the network and receive custodied USDDD allocation.
+                <span className="ml-2 text-slate-200">/fund</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
+            USDDD is by the people, for the people - transparency first. If you want to be early, join Telegram and help shape Genesis.
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            <a
+              href="https://usddd.digdug.do/fund"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+            >
+              Fund Network
+            </a>
+            <a
+              href={LINKS.telegram}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 hover:bg-slate-950/70"
+            >
+              Join Telegram
+            </a>
+          </div>
+        </div>
+      </ScanModal>
+
+      <ScanModal
+        open={modal.open && modal.key === "airdrop"}
+        title="USDDD Wallet Verification Drop"
+        onClose={closeModal}
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg border border-orange-500/30 bg-orange-950/15 p-3">
+            <div className="text-[12px] font-semibold text-orange-200">
+              {AIRDROP_COMPLETE ? "Verification Complete" : "48h Verification Window"}
+            </div>
+
+            <div className="mt-1 text-[12px] text-orange-100/80">
+              {AIRDROP_COMPLETE ? (
+                <>
+                  🎉 <span className="font-semibold">10,000 wallets verified.</span>
+                  <br />
+                  Trust Wallet verification requirements have been satisfied.
+                </>
+              ) : (
+                <>
+                  We’re resolving the Trust Wallet counterfeit warning by verifying the real USDDD + DIGDUG.DO relationship.
+                  Add your wallet to be counted.
+                </>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] text-slate-400">Wallets added</div>
+                <div className="text-xl font-extrabold text-slate-100 tabular-nums">
+                  {Math.min(airdropCount, AIRDROP_TARGET).toLocaleString()}{" "}
+                  <span className="text-slate-500 text-[12px]">/ {AIRDROP_TARGET.toLocaleString()}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] text-slate-400">Closes in</div>
+                <div className="font-mono text-[13px] text-orange-200">
+                  {AIRDROP_COMPLETE ? "COMPLETED" : formatHMS(airdropRemainingMs())}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 h-2 w-full rounded-full bg-slate-800/60 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-orange-400/70 transition-[width] duration-500"
+                style={{ width: `${Math.min(100, Math.floor((airdropCount / AIRDROP_TARGET) * 100))}%` }}
+              />
+            </div>
+
+            <div className="mt-2 text-[11px] text-slate-400">
+              Headline on X:{" "}
+              <a
+                href="https://x.com/toastpunk/status/2019182130228785177"
+                target="_blank"
+                rel="noreferrer"
+                className="text-orange-200 underline underline-offset-2 decoration-orange-500/40 hover:decoration-orange-500/80"
+              >
+                View post ↗
+              </a>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+            <div className="text-[12px] font-semibold text-slate-200">Register your wallet</div>
+
+            {AIRDROP_COMPLETE ? (
+              <div className="mt-2 rounded-md border border-slate-800 bg-slate-950/40 p-3 text-[12px] text-slate-300">
+                Wallet registration is closed.
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={airdropAddr}
+                  onChange={(e) => setAirdropAddr(e.target.value)}
+                  placeholder="0x... BEP-20 wallet address"
+                  className="flex-1 rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-[12px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-orange-500/40"
+                />
+                <button
+                  type="button"
+                  onClick={submitAirdrop}
+                  disabled={airdropSubmitting}
+                  className="rounded-md border border-orange-500/40 bg-orange-950/20 px-3 py-2 text-[12px] font-semibold text-orange-200 hover:bg-orange-950/35 disabled:opacity-50"
+                >
+                  {airdropSubmitting ? "Submitting…" : "Claim"}
+                </button>
+              </div>
+            )}
+
+            {airdropMsg ? <div className="mt-2 text-[12px] text-slate-300">{airdropMsg}</div> : null}
+
+            <div className="mt-2 text-[11px] text-slate-500">
+              {AIRDROP_COMPLETE
+                ? "This verification window is complete. Follow and join Telegram for the next drop."
+                : "This registers your wallet for verification. Final distribution may occur after the window closes or when the target is reached."}
+            </div>
+          </div>
+
+          {/* ✅ CTA block */}
+          {AIRDROP_COMPLETE && (
+            <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 p-3 text-[12px] text-emerald-200">
+              <div className="font-semibold">What’s next</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-100/90">
+                <li>
+                  Follow{" "}
+                  <a
+                    href="https://x.com/toastpunk"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    @toastpunk
+                  </a>{" "}
+                  on X for the next drop.
+                </li>
+                <li>
+                  Join Telegram for Genesis updates and upcoming airdrops:{" "}
+                  <a
+                    href={LINKS.telegram}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    t.me/digdugdo
+                  </a>
+                </li>
+              </ul>
+            </div>
+          )}
+
+          {/* ✅ Hide Live feed once complete to avoid nested scrollbars */}
+          {!AIRDROP_COMPLETE && (
+            <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[12px] font-semibold text-slate-200">Live feed</div>
+                <div className="text-[11px] text-slate-500">refreshing every 1s</div>
+              </div>
+
+              <div className="mt-2 h-40 overflow-hidden rounded-md border border-slate-800 bg-slate-950/30">
+                <div className="h-full overflow-y-auto p-2 font-mono text-[12px] text-slate-300 space-y-1">
+                  {airdropLatest.length ? (
+                    airdropLatest.map((w, i) => <div key={`${w}-${i}`}>{w}</div>)
+                  ) : (
+                    <div className="text-slate-500">Waiting for wallets…</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScanModal>
+
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <div className="grid gap-4 md:grid-cols-12">
+          <section
+            className={[
+              "md:col-span-6 rounded-xl bg-slate-950/30 p-4",
+              goldenActive
+                ? "border border-amber-500/50 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]"
+                : "border border-slate-800/60",
+            ].join(" ")}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-200">Network Activity</h2>
+
+              <div className="flex items-center gap-2">
+                <ActivityWindowPills value={activityWindow} onChange={setActivityWindow} />
+              </div>
+            </div>
+
+            <NetworkActivityCard refreshTick={refreshTick} windowHours={activityWindow} isGoldenHour={goldenActive} />
+          </section>
+
+          <section className="md:col-span-6 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-200">Latest Golden Finds</h2>
+
+              <div className="flex items-center gap-2">
+                <div className="hidden md:flex">
+                  <GoldenPulsePills />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openModal("golden")}
+                  className="text-[11px] text-slate-400 hover:text-slate-200"
+                >
+                  View all
+                </button>
+              </div>
+            </div>
+
+            <LatestGoldenFindsTable refreshTick={refreshTick} onOpenPayout={openPayout} />
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="text-[12px] text-slate-400">Use the Terminal to DIG and earn rewards.</div>
+              <a
+                href={LINKS.terminal}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Open Terminal
+              </a>
+              <a
+                href={LINKS.telegram}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Join Telegram
+              </a>
+            </div>
+          </section>
+
+          <section className="md:col-span-8 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-200">Box Balances</h2>
+              <button
+                type="button"
+                onClick={() => openModal("boxes")}
+                className="text-[11px] text-slate-400 hover:text-slate-200"
+              >
+                View all
+              </button>
+            </div>
+
+            <BoxBalancesTable refreshTick={refreshTick} />
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="text-[12px] text-slate-400">Deploy a box, fund rewards, gain exposure.</div>
+              <button
+                type="button"
+                onClick={() => openModal("sponsor")}
+                className="ml-auto rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Become a Sponsor
+              </button>
+              <a
+                href={LINKS.docs}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-1.5 text-[12px] text-slate-200 hover:bg-slate-950/70"
+              >
+                Sponsor Docs
+              </a>
+            </div>
+          </section>
+
+          <section className="md:col-span-4 rounded-xl border border-slate-800/60 bg-slate-950/30 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-200">Leaderboards</h2>
+              <span className="text-[11px] text-slate-400">tabs next</span>
+            </div>
+
+            <div className="space-y-2 text-[13px]">
+              <div className="rounded-lg border border-slate-800/60 bg-slate-950/40 p-3">
+                <div className="text-slate-200">Golden winners</div>
+                <div className="mt-1 text-[12px] text-slate-400">Top by wins / USD</div>
+                <GoldenWinnersLeaderboard refreshTick={refreshTick} />
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <footer className="mt-6 text-center text-[12px] text-slate-500">
+          USDDD - Zero Phase Public Testnet - Read-only - No wallets - No tracking
+        </footer>
+      </div>
+    </main>
+  );
+}
