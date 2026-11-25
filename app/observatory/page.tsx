@@ -19,7 +19,7 @@ async function getSnapshot(): Promise<Snapshot | null> {
   }
 }
 
-const dispatch = "https://www.digdug.do/#surface-dispatch";
+const dispatch = "https://www.digdug.do/surface-dispatch";
 const play = "https://play.digdug.do/";
 
 export default async function ObservatoryPage() {
