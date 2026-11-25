@@ -1,3 +1,4 @@
+import { fundAuthenticatorDatabaseAllowed } from "../../../fund/authenticator-config";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes, createHash, createCipheriv } from "crypto";
@@ -28,6 +29,9 @@ function makePositionRef(): string {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!fundAuthenticatorDatabaseAllowed()) {
+      return NextResponse.json({ ok: false, error: "Fund deposit issuance requires an isolated Preview database." }, { status: 503 });
+    }
     const supabaseUrl = env("SUPABASE_URL");
     const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
 

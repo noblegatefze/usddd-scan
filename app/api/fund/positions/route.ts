@@ -1,3 +1,4 @@
+import { fundAuthenticatorDatabaseAllowed } from "../../../fund/authenticator-config";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -11,6 +12,10 @@ function env(name: string): string {
 export async function POST(req: NextRequest) {
   try {
     const j = await req.json().catch(() => ({} as any));
+
+    if (j?.authenticator === true && !fundAuthenticatorDatabaseAllowed()) {
+      return NextResponse.json({ error: "Fund Authenticator Preview is not configured." }, { status: 503 });
+    }
 
     const session_id = typeof j?.session_id === "string" ? j.session_id.trim() : "";
     const refs: string[] = Array.isArray(j?.refs) ? j.refs.map((x: any) => String(x).trim()).filter(Boolean) : [];

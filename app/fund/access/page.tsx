@@ -23,7 +23,7 @@ async function post(path: string, body: object) {
 
 export default function FundAccess() {
   const [mode, setMode] = useState<"login" | "start" | "finish">("login");
-  const [pending, setPending] = useState<{ challenge: string; setupKey: string } | null>(null);
+  const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string } | null>(null);
   const [positions, setPositions] = useState<Position[] | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -91,14 +91,20 @@ export default function FundAccess() {
       <button type="button" disabled={busy} onClick={signOut} className="underline">Sign out</button>
     </> : <>
       <h2 className="mt-6 text-xl">{mode === "login" ? "Sign in" : mode === "start" ? "Set up Google Authenticator" : "Confirm your setup"}</h2>
-      {pending && mode === "finish" && <p className="mt-3">In Google Authenticator, add a time-based entry named DIGDUG.DO Fund Network with this setup key. <code className="block break-all py-2">{pending.setupKey}</code></p>}
+      {pending && mode === "finish" && <div className="mt-3 space-y-3">
+        <p>Scan this QR code in Google Authenticator, then enter the six-digit code below.</p>
+        {/* The data URL contains the enrollment secret, so render it locally. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={pending.qrCode} alt="Scan to enroll in Fund Network" width={240} height={240} className="max-w-full rounded-md" />
+        <details><summary>Enter a setup key manually</summary><code className="block break-all py-2">{pending.setupKey}</code></details>
+      </div>}
       <form key={mode} onSubmit={submit} className="my-4 grid gap-3">
         {mode !== "finish" && <>
           <label>Terminal username<input className={field} name="username" autoComplete="username" maxLength={100} required /></label>
           <label>Terminal Pass<input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>
         </>}
         {mode !== "start" && <label>Six-digit Authenticator code<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>}
-        <button disabled={busy} className="rounded-md bg-sky-300 px-4 py-2 font-semibold text-slate-950">{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "start" ? "Get setup key" : "Verify and sign in"}</button>
+        <button disabled={busy} className="rounded-md bg-sky-300 px-4 py-2 font-semibold text-slate-950">{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "start" ? "Continue to Authenticator" : "Verify and sign in"}</button>
         <p role="status" className="text-amber-300">{message}</p>
       </form>
       <button type="button" disabled={busy} className="underline" onClick={() => {

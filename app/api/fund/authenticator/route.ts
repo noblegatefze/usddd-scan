@@ -1,4 +1,6 @@
+import { fundAuthenticatorDatabaseAllowed } from "../../../fund/authenticator-config";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import QRCode from "qrcode";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -71,6 +73,7 @@ function withSession(value: string) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!fundAuthenticatorDatabaseAllowed()) return json({ error: "Fund Authenticator Preview is not configured." }, 503);
   const secretKey = process.env.FUND_AUTHENTICATOR_KEY ?? "";
   const origin = process.env.FUND_AUTHENTICATOR_ORIGIN;
   if (!/^[a-f0-9]{64}$/i.test(secretKey) || !origin) {
@@ -139,6 +142,11 @@ export async function POST(req: NextRequest) {
       if (credential) return json({ error: "Fund Authenticator is already set up. Sign in or contact support." }, 409);
       if (user.twofa_enabled) return json({ error: "Contact support to migrate your existing Terminal two-factor authentication." }, 409);
       const secret = randomBytes(20);
+      const manualKey = setupKey(secret);
+      const issuer = "DIGDUG.DO Fund Network";
+      const label = encodeURIComponent(issuer + ":" + username);
+      const uri = "otpauth://totp/" + label + "?" + new URLSearchParams({ secret: manualKey, issuer });
+      const qrCode = await QRCode.toDataURL(uri, { width: 240 });
       const challenge = token();
       const { error } = await db.from("fund_authenticator_enrollments").insert({
         challenge_hash: hash(challenge), terminal_user_id: user.id,
@@ -146,7 +154,7 @@ export async function POST(req: NextRequest) {
         expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
       if (error) throw error;
-      return json({ challenge, setupKey: setupKey(secret) });
+      return json({ challenge, setupKey: manualKey, qrCode });
     }
 
     if (!credential) return deny();
