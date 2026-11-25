@@ -32,6 +32,7 @@ export default async function ObservatoryPage() {
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-sky-300/20 pb-5">
           <span className="font-mono text-sm tracking-widest text-sky-200">DIGDUG.DO</span>
           <nav aria-label="Observatory" className="flex flex-wrap gap-4 text-sm text-sky-200">
+            <a href="https://www.digdug.do/#surface-dispatch">Surface Dispatch</a>
             <Link href="/zero-phase-archive">Zero Phase Archive</Link>
             <Link href="/fund">Fund Network</Link>
           </nav>
