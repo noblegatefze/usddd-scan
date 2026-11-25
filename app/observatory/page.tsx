@@ -15,10 +15,7 @@ type Snapshot = {
 
 async function getSnapshot(): Promise<Snapshot | null> {
   try {
-    const endpoint = process.env.FLATVERSE_SNAPSHOT_URL ?? (
-      process.env.VERCEL_ENV === "production" ? "https://play.digdug.do/api/world" :
-        "https://digdug-flatverse-deyjm2aam-dig-dug-do.vercel.app/api/world"
-    );
+    const endpoint = process.env.FLATVERSE_SNAPSHOT_URL ?? "https://play.digdug.do/api/world";
     const response = await fetch(endpoint, { next: { revalidate: 10 }, signal: AbortSignal.timeout(3000) });
     return response.ok ? await response.json() : null;
   } catch {
