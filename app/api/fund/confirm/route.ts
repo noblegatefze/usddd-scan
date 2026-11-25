@@ -62,19 +62,32 @@ export async function POST(req: Request) {
 
     if (error || !pos) throw new Error("Position not found");
 
-    // do not overwrite once set
+    const positionId = pos.id;
+
+    async function linkUnownedPosition(owner: string | null): Promise<string | null> {
+      if (owner || !terminalUserId) return owner;
+
+      const { data: linked } = await sb
+        .from("fund_positions")
+        .update({ terminal_user_id: terminalUserId })
+        .eq("id", positionId)
+        .is("terminal_user_id", null)
+        .select("terminal_user_id")
+        .maybeSingle();
+
+      return linked?.terminal_user_id ?? null;
+    }
+
+    // Do not overwrite an existing deposit or its owner.
     if (pos.deposit_tx_hash) {
-      // If position already confirmed but missing terminal linkage, attach it now (best-effort)
-      if (!pos.terminal_user_id && terminalUserId) {
-        await sb.from("fund_positions").update({ terminal_user_id: terminalUserId }).eq("id", pos.id);
-      }
+      const owner = await linkUnownedPosition(pos.terminal_user_id);
 
       return NextResponse.json({
         ok: true,
         status: pos.status,
         position_ref: ref,
         note: "Already confirmed (deposit_tx_hash set).",
-        terminal_user_id: (pos.terminal_user_id ?? terminalUserId) ?? null,
+        terminal_user_id: owner,
       });
     }
 
@@ -142,7 +155,6 @@ export async function POST(req: Request) {
       funded_at: fundedAtIso,
       status: "funded_locked",
     };
-    if (terminalUserId) updatePayload.terminal_user_id = terminalUserId;
 
     const { data: updRows, error: updErr } = await sb
       .from("fund_positions")
@@ -150,10 +162,12 @@ export async function POST(req: Request) {
       .eq("id", pos.id)
       .eq("status", "awaiting_funds")
       .is("deposit_tx_hash", null)
-      .select("id");
+      .select("id, terminal_user_id");
 
     if (updErr) throw updErr;
     if (!updRows || updRows.length === 0) throw new Error("Position updated by someone else");
+
+    const owner = await linkUnownedPosition(updRows[0].terminal_user_id);
 
     // Auto-sweep immediately after confirm
     const origin = new URL(req.url).origin;
@@ -209,7 +223,7 @@ export async function POST(req: Request) {
       deposit_tx_hash: tx,
       funded_usdt: amount,
       funded_at: fundedAtIso,
-      terminal_user_id: terminalUserId,
+      terminal_user_id: owner,
       status: sweep?.ok ? "swept_locked" : "funded_locked",
       sweep,
       mint,
