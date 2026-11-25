@@ -814,15 +814,14 @@ export default function FundNetworkPage() {
     setBinding(true);
     try {
       const refs = readSavedRefs();
-      if (refs.length === 0) {
-        setBindErr("No saved refs in this browser yet. Generate a position first.");
-        return;
-      }
-
-      const r = await fetch("/api/fund/bind", {
+      // A new browser can restore positions already owned by the signed-in account.
+      // Only the existing saved-reference flow submits a binding request.
+      const endpoint = refs.length ? "/api/fund/bind" : "/api/fund/positions";
+      const body = refs.length ? { session_id: sid, refs } : { session_id: sid };
+      const r = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ session_id: sid, refs }),
+        body: JSON.stringify(body),
         cache: "no-store",
       });
 
@@ -833,6 +832,7 @@ export default function FundNetworkPage() {
       }
 
       saveSessionId(sid);
+      sessionIdRef.current = sid;
       setBound(true);
       await hydrateDbByRefsOrSession();
     } catch (e: any) {
