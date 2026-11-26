@@ -59,6 +59,7 @@ export default function FundNetwork() {
         <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Manage deposits and withdrawals</summary>
         <div className="mt-3 grid gap-2 text-xs text-slate-300">
           <p>Open Fund tools to issue a deposit address, confirm a deposit, or request a withdrawal.</p>
+          <p>Already paid to a legacy deposit address that isn’t linked to your account? <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Legacy%20Fund%20deposit%20review">Request manual review</a> with your transaction hash, deposit address, and position reference if available.</p>
           <a className="justify-self-start rounded border border-cyan-800 px-2.5 py-1.5 font-medium text-cyan-100" href="https://usddd.digdug.do/fund?legacy=1#positions" target="_blank" rel="noreferrer">Open Fund tools ↗</a>
         </div>
       </details>
