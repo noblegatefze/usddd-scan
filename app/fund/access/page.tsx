@@ -51,6 +51,15 @@ export default function FundAccess() {
   async function loadPositions() {
     const data = await post("positions", { authenticator: true });
     setPositions(data.positions);
+    if (parentSite() === "https://fund.digdug.do") {
+      notifyParent({
+        type: "flatverse-fund-positions",
+        username: data.explorer?.username ?? null,
+        positions: data.positions.map((position: Position) => ({
+          id: position.id, position_ref: position.position_ref, status: position.status, funded_usdt: position.funded_usdt,
+        })),
+      });
+    }
     setExplorer(data.explorer ?? null);
     if (typeof data.explorer?.username === "string") notifyParent({ type: "flatverse-profile", username: data.explorer.username });
   }
@@ -64,6 +73,7 @@ export default function FundAccess() {
         setPositions(null);
         setExplorer(null);
         notifyParent({ type: "flatverse-profile", username: null });
+        if (parentSite() === "https://fund.digdug.do") notifyParent({ type: "flatverse-fund-positions", username: null, positions: [] });
       }
     });
     const receive = (event: MessageEvent) => {
@@ -146,6 +156,7 @@ export default function FundAccess() {
       setMode("login");
       setWizardScreen("form");
       notifyParent({ type: "flatverse-profile", username: null });
+      if (parentSite() === "https://fund.digdug.do") notifyParent({ type: "flatverse-fund-positions", username: null, positions: [] });
       sessionChannel?.postMessage("refresh");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Sign-out failed.");
@@ -196,7 +207,7 @@ export default function FundAccess() {
         <section className={card}>
           <h2 className="font-semibold text-cyan-100">Legacy Terminal users</h2>
           <p className="text-xs">Use your Terminal username and Terminal Pass to set up your Explorer account.</p>
-          <a className={link} href="https://www.digdug.do/legacy-terminal" target="_blank" rel="noreferrer">Go to Legacy Terminal</a>
+          <a className={link} href="https://old.digdug.do/" target="_blank" rel="noreferrer">Go to Legacy Terminal</a>
         </section>
         <section className={card}>
           <h2 className="font-semibold text-cyan-100">Lost Authenticator PIN</h2>
