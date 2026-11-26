@@ -7,6 +7,8 @@ type Position = {
   id: string;
   position_ref: string;
   status: string;
+  locked?: boolean | null;
+  issued_deposit_address?: string | null;
   funded_usdt: string | number | null;
   deposit_tx_hash: string | null;
   sweep_tx_hash: string | null;
@@ -58,6 +60,7 @@ export default function FundAccess() {
         positions: data.positions.map((position: Position) => ({
           id: position.id, position_ref: position.position_ref, status: position.status, funded_usdt: position.funded_usdt,
           deposit_tx_hash: position.deposit_tx_hash, sweep_tx_hash: position.sweep_tx_hash,
+          locked: position.locked, issued_deposit_address: position.issued_deposit_address,
         })),
       });
     }
@@ -80,6 +83,22 @@ export default function FundAccess() {
     const receive = (event: MessageEvent) => {
       if (event.source !== window.parent || event.origin !== parentSite()) return;
       if (event.data?.type === "flatverse-refresh-profile") refresh();
+      if (event.origin === "https://fund.digdug.do" && event.data?.type === "flatverse-fund-action") {
+        const { id, action, payload } = event.data;
+        const paths = { issue: "issue-address", confirm: "confirm", withdrawal: "withdraw/request" } as const;
+        if (typeof id !== "string" || !Object.hasOwn(paths, action)) return;
+        const endpoint = paths[action as keyof typeof paths];
+        void post(endpoint, { ...payload, explorer: true }).then((result) => {
+          notifyParent({
+            type: "flatverse-fund-action-result", id, ok: true, position: result.position,
+            status: result.status, mode: result.mode,
+          });
+          refresh();
+        }).catch((error) => {
+          notifyParent({ type: "flatverse-fund-action-result", id, ok: false,
+            error: error instanceof Error ? error.message : "Fund request failed." });
+        });
+      }
       if (event.origin === "https://play.digdug.do" && event.data?.type === "flatverse-request-play-ticket") {
         void post("authenticator", { action: "play_ticket" }).then(({ ticket }) => {
           notifyParent({ type: "flatverse-play-ticket", ticket });
