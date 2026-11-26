@@ -38,6 +38,7 @@ export default function FundAccess() {
   const [mode, setMode] = useState<"login" | "new" | "legacy" | "finish">("login");
   const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string } | null>(null);
   const [embedded, setEmbedded] = useState(false);
+  const [sessionChannel, setSessionChannel] = useState<BroadcastChannel | null>(null);
   const [explorerEnrollment, setExplorerEnrollment] = useState(false);
   const [explorer, setExplorer] = useState<{ username: string; badge: string } | null>(null);
   const [positions, setPositions] = useState<Position[] | null>(null);
@@ -71,11 +72,14 @@ export default function FundAccess() {
       }
     };
     window.addEventListener("message", receive);
+    const channel = typeof BroadcastChannel === "function" ? new BroadcastChannel("digdug-explorer-session") : null;
+    if (channel) channel.onmessage = refresh;
+    setSessionChannel(channel);
     refresh();
     void fetch("/api/fund/authenticator", { cache: "no-store", signal: controller.signal })
       .then(async response => { if (response.ok) setExplorerEnrollment((await response.json()).explorerEnrollment === true); })
       .catch(() => {});
-    return () => { controller.abort(); window.removeEventListener("message", receive); };
+    return () => { controller.abort(); channel?.close(); window.removeEventListener("message", receive); };
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -99,6 +103,7 @@ export default function FundAccess() {
         setPending(null);
         setMode("login");
         await loadPositions();
+        sessionChannel?.postMessage("refresh");
       }
     } catch (error) {
       for (const name of ["pass", "code"]) {
@@ -117,6 +122,7 @@ export default function FundAccess() {
       setPositions(null);
       setExplorer(null);
       notifyParent({ type: "flatverse-profile", username: null });
+      sessionChannel?.postMessage("refresh");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Sign-out failed.");
     } finally { setBusy(false); }
