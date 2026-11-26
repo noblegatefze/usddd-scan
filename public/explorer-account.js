@@ -12,6 +12,19 @@
     .dd-account-nav > .site-nav{justify-content:flex-end;width:auto;min-width:0}
     .dd-account-nav > [data-explorer-account]{margin-inline-start:0}
     #gameFocus .dd-account-nav > #siteMenu{margin-inline-start:0}
+    @media(max-width:760px){
+      header:has(> .dd-account-nav > nav){
+        display:grid;grid-template-columns:minmax(0,1fr) auto;
+        align-items:center;column-gap:8px;row-gap:8px
+      }
+      header > .dd-account-nav:has(> nav){display:contents}
+      header > .dd-account-nav > nav{
+        grid-column:1 / -1;grid-row:2;display:flex;flex-wrap:wrap;
+        justify-content:flex-start;width:100%;min-width:0;max-width:100%;gap:7px 12px
+      }
+      header > .dd-account-nav > nav > a{min-width:0;max-width:100%;overflow-wrap:anywhere}
+      header > .dd-account-nav > [data-explorer-account]{grid-column:2;grid-row:1;justify-self:end}
+    }
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
     .dd-account-avatar{position:relative}
     .dd-account-avatar-image{width:65%;height:65%;object-fit:cover;border-radius:50%;opacity:.6}
