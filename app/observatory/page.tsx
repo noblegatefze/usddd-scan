@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import LiveRefresh from "./live-refresh";
+import LiveRefresh, { RankResetCountdown } from "./live-refresh";
 
 export const metadata = { title: "Flatverse Observatory | DIGDUG.DO" };
 
@@ -95,7 +95,7 @@ export default async function ObservatoryPage() {
                       {find.tokens.map((token, tokenIndex) => (
                         <div key={tokenIndex}>
                           {token.amount} {token.symbol}
-                          {token.usdCents !== null && <span> · ${(token.usdCents / 100).toFixed(2)} simulated</span>}
+                          {token.usdCents !== null && <span> · ${(token.usdCents / 100).toFixed(2)} at extraction</span>}
                         </div>
                       ))}
                     </li>
@@ -121,7 +121,7 @@ export default async function ObservatoryPage() {
                 ))}</ul>}
               </> : <p>24-hour totals are temporarily unavailable.</p>}
             </section>
-            <section className="ob-panel"><h2>Daily practice ranks</h2><p>Top ten · Resets at 00:00 UTC</p>
+            <section className="ob-panel"><h2>Daily practice ranks</h2><p>Top ten · Resets in <RankResetCountdown /></p>
               {snapshot?.leaderboard.length ? <ol className="ob-board">{snapshot.leaderboard.slice(0, 10).map((actor, index) => <li key={index}><span>{index + 1}.</span><span>{actor.name}{actor.runs != null && <small> · {actor.runs} runs</small>}</span><strong>${(actor.score / 100).toFixed(2)}</strong></li>)}</ol> : <p>No standings available.</p>}
             </section>
             <div className="ob-lower">
