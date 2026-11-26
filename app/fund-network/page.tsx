@@ -9,7 +9,11 @@ const pageSize = 10;
 const pageButton = "rounded border border-cyan-800 px-2.5 py-1 text-xs text-cyan-100 disabled:opacity-40";
 const accountOrigin = "https://usddd.digdug.do";
 const units = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
-const links = [["Home","https://www.digdug.do/"],["Observatory",accountOrigin+"/"],["Surface Dispatch","https://feed.digdug.do/"],["Play Flatverse","https://play.digdug.do/"]];
+const links = [
+  ["Home", "https://digdug.do/"],
+  ["Observatory", accountOrigin + "/"],
+  ["Surface Dispatch", "https://feed.digdug.do/"],
+];
 
 export default function FundNetwork() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -41,11 +45,14 @@ export default function FundNetwork() {
 
   return <main className="min-h-screen bg-[#04111e] px-4 py-5 text-slate-100 sm:px-8">
     <div className="mx-auto grid max-w-[1420px] gap-4">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-cyan-700 bg-[#061c2d] px-4 py-3">
-        <a href="https://fund.digdug.do/" className="text-xl font-black tracking-tight">DIGDUG.DO <span className="text-cyan-200">/ FUND NETWORK</span></a>
+      <header className="flex flex-wrap items-center justify-between gap-[13px] rounded-[7px] border border-[#3dd9ef] bg-[#051c2c] px-[18px] py-3 font-[Arial,Helvetica,sans-serif] max-[760px]:px-2.5 max-[760px]:py-2">
+        <a href="https://digdug.do/" className="text-[clamp(19px,2.4vw,31px)] font-black tracking-[-0.035em] hover:underline">
+          DIGDUG.DO <span className="text-[0.71em] text-[#7defff]">/ FUND NETWORK</span>
+        </a>
         <div className="dd-account-nav">
-          <nav className="site-nav flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold" aria-label="Fund Network navigation">
-            {links.map(([label, url]) => <a key={label} href={url} className="hover:text-cyan-200">{label}</a>)}
+          <nav className="site-nav flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-bold max-[760px]:gap-x-3 max-[760px]:gap-y-[7px] max-[760px]:text-xs" aria-label="Fund Network navigation">
+            {links.map(([label, url]) => <a key={label} href={url} className="hover:underline">{label}</a>)}
+            <a href="https://play.digdug.do/" className="rounded-md border border-[#ffeb9e] bg-[linear-gradient(#ffdc54,#ffb400)] px-[13px] py-[7px] text-center font-black text-[#07121b] hover:underline max-[760px]:w-full">Play Flatverse</a>
           </nav>
           <div data-explorer-account="" />
         </div>
