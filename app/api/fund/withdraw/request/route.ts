@@ -1,5 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+
+import { createHash } from "node:crypto";
+import { acceptedStep, open } from "../../../../fund/authenticator-code";
+import { isExplorerFundActionOrigin, resolveExplorerFundOwner } from "../../../../fund/explorer-owner";
 
 function env(name: string, fallback?: string): string {
   const v = process.env[name];
@@ -27,7 +31,7 @@ function jsonNoStore(body: any, status = 200) {
   });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const j = await req.json().catch(() => ({} as any));
 
@@ -35,7 +39,8 @@ export async function POST(req: Request) {
     const position_ref = typeof j?.position_ref === "string" ? j.position_ref.trim() : "";
     const to_address = typeof j?.to_address === "string" ? j.to_address.trim() : "";
 
-    if (!session_id) return jsonNoStore({ ok: false, error: "missing_session_id" }, 400);
+    const native = j?.explorer === true;
+    if (!native && !session_id) return jsonNoStore({ ok: false, error: "missing_session_id" }, 400);
     if (!position_ref) return jsonNoStore({ ok: false, error: "missing_position_ref" }, 400);
     if (!to_address) return jsonNoStore({ ok: false, error: "missing_to_address" }, 400);
     if (!isLikelyEvmAddress(to_address)) return jsonNoStore({ ok: false, error: "invalid_to_address" }, 400);
@@ -52,36 +57,46 @@ export async function POST(req: Request) {
       return jsonNoStore({ ok: false, paused: true }, 503);
     }
 
-    // OTP-like freshness: require a recently created terminal session
-    // This assumes "refresh to get Session ID" creates a new dd_sessions row.
-    const SESSION_MAX_AGE_MIN = 10;
-
-    const { data: sess, error: sErr } = await sb
-      .from("dd_sessions")
-      .select("session_id, created_at, user_id, source")
-      .eq("session_id", session_id)
-      .eq("source", "terminal")
-      .limit(1)
-      .single();
-
-    if (sErr || !sess?.user_id) return jsonNoStore({ ok: false, error: "session_not_found" }, 401);
-
-    const createdMs = Date.parse(String(sess.created_at || ""));
-    if (!Number.isFinite(createdMs)) return jsonNoStore({ ok: false, error: "session_invalid" }, 401);
-
-    const ageMin = (Date.now() - createdMs) / 60000;
-    if (ageMin > SESSION_MAX_AGE_MIN) {
-      return jsonNoStore(
-        {
-          ok: false,
-          error: "session_not_fresh",
-          hint: "Open Terminal, refresh, copy the new session_id, and try again.",
-        },
-        401
-      );
+    let terminal_user_id: string;
+    if (native) {
+      if (process.env.FUND_NATIVE_ACTIONS_ENABLED !== "true" || !isExplorerFundActionOrigin(req)) {
+        return jsonNoStore({ ok: false, error: "Explorer withdrawals are unavailable." }, 403);
+      }
+      const owner = await resolveExplorerFundOwner(req, sb);
+      if (!owner) return jsonNoStore({ ok: false, error: "Sign in to request a withdrawal." }, 401);
+      terminal_user_id = owner;
+    } else {
+      // OTP-like freshness: require a recently created terminal session
+      // This assumes "refresh to get Session ID" creates a new dd_sessions row.
+      const SESSION_MAX_AGE_MIN = 10;
+  
+      const { data: sess, error: sErr } = await sb
+        .from("dd_sessions")
+        .select("session_id, created_at, user_id, source")
+        .eq("session_id", session_id)
+        .eq("source", "terminal")
+        .limit(1)
+        .single();
+  
+      if (sErr || !sess?.user_id) return jsonNoStore({ ok: false, error: "session_not_found" }, 401);
+  
+      const createdMs = Date.parse(String(sess.created_at || ""));
+      if (!Number.isFinite(createdMs)) return jsonNoStore({ ok: false, error: "session_invalid" }, 401);
+  
+      const ageMin = (Date.now() - createdMs) / 60000;
+      if (ageMin > SESSION_MAX_AGE_MIN) {
+        return jsonNoStore(
+          {
+            ok: false,
+            error: "session_not_fresh",
+            hint: "Open Terminal, refresh, copy the new session_id, and try again.",
+          },
+          401
+        );
+      }
+  
+      terminal_user_id = String(sess.user_id);
     }
-
-    const terminal_user_id = String(sess.user_id);
 
     // Load position + ownership
     const { data: pos, error: pErr } = await sb
@@ -102,6 +117,26 @@ export async function POST(req: Request) {
     if (Boolean(pos.locked) !== false) return jsonNoStore({ ok: false, error: "withdraw_locked" }, 403);
     if (String(pos.status) !== "swept_locked") return jsonNoStore({ ok: false, error: "withdraw_not_allowed_status" }, 403);
 
+    if (native) {
+      const keyHex = process.env.FUND_AUTHENTICATOR_KEY ?? "";
+      if (!/^[a-f0-9]{64}$/i.test(keyHex)) return jsonNoStore({ error: "Authenticator temporarily unavailable." }, 503);
+      const bucket = createHash("sha256").update("withdraw:" + terminal_user_id).digest("hex");
+      const { data: allowed, error: budgetError } = await sb.rpc("fund_authenticator_allow_attempt", { p_bucket: bucket, p_limit: 5 });
+      if (budgetError) return jsonNoStore({ error: "Authenticator temporarily unavailable." }, 503);
+      if (!allowed) return jsonNoStore({ error: "Too many attempts. Try again in a few minutes." }, 429);
+      const { data: credential, error: codeLookupError } = await sb.from("fund_authenticator_credentials")
+        .select("encrypted_secret").eq("terminal_user_id", terminal_user_id).maybeSingle();
+      if (codeLookupError) return jsonNoStore({ error: "Authenticator temporarily unavailable." }, 503);
+      const step = credential && acceptedStep(open(credential.encrypted_secret, Buffer.from(keyHex, "hex"), terminal_user_id), j?.code);
+      if (step == null || !credential) return jsonNoStore({ error: "Enter a current Authenticator PIN." }, 401);
+      const { data: used, error: useError } = await sb.from("fund_authenticator_credentials")
+        .update({last_accepted_step:step}).eq("terminal_user_id",terminal_user_id)
+        .eq("encrypted_secret",credential.encrypted_secret).lt("last_accepted_step",step)
+        .select("terminal_user_id").maybeSingle();
+      if (useError) return jsonNoStore({ error: "Authenticator temporarily unavailable." }, 503);
+      if (!used) return jsonNoStore({ error: "Wait for the next Authenticator PIN and try again." }, 401);
+    }
+
     // Insert withdrawal request (idempotent: unique(position_id))
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -109,7 +144,7 @@ export async function POST(req: Request) {
       null;
 
     const ua = req.headers.get("user-agent") || null;
-    const session_hint = session_id.length >= 6 ? session_id.slice(-6) : session_id;
+    const session_hint = native ? "totp" : session_id.length >= 6 ? session_id.slice(-6) : session_id;
 
     const { data: ins, error: iErr } = await sb
       .from("fund_withdrawals")
