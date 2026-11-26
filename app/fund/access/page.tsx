@@ -21,7 +21,7 @@ async function post(path: string, body: object) {
   return data;
 }
 
-const accountSites = new Set(["https://www.digdug.do", "https://digdug.do", "https://usddd.digdug.do", "https://play.digdug.do"]);
+const accountSites = new Set(["https://www.digdug.do", "https://digdug.do", "https://usddd.digdug.do", "https://play.digdug.do", "https://feed.digdug.do", "https://fund.digdug.do"]);
 
 function parentSite() {
   if (window.parent === window || !document.referrer) return null;
@@ -130,7 +130,7 @@ export default function FundAccess() {
 
   const field = "block w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2";
   return <main className="mx-auto max-w-3xl bg-[#071c2f] px-5 py-5 text-slate-100">
-    {!embedded && <a href="/fund" className="text-sky-300">← Fund Network</a>}
+    {!embedded && <a href="https://fund.digdug.do/" className="text-sky-300">← Fund Network</a>}
     <header className="mt-5 rounded-xl border border-slate-700 bg-slate-900/60 p-5">
       <h1 className="text-2xl font-semibold">Explorer accounts</h1>
       <p className="mt-2 text-sm text-slate-300">{explorerEnrollment ? "Create an Explorer account or sign in with Google Authenticator. This view is read-only. Use Fund Network for deposit and withdrawal requests." : "Read-only Authenticator pilot for invited accounts. Use Fund Network for deposit and withdrawal requests."}</p>
