@@ -1,9 +1,10 @@
 "use client";
 
 import Script from "next/script";
+import FundActions, { type FundActionPosition } from "./fund-actions";
 import { useEffect, useState } from "react";
 
-type Position = { id: string; position_ref: string; status: string; funded_usdt: number | string | null; deposit_tx_hash?: string | null; sweep_tx_hash?: string | null };
+type Position = FundActionPosition & { funded_usdt: number | string | null; deposit_tx_hash?: string | null; sweep_tx_hash?: string | null };
 type Account = { username: string | null; positions: Position[] };
 const pageSize = 10;
 const pageButton = "rounded border border-cyan-800 px-2.5 py-1 text-xs text-cyan-100 disabled:opacity-40";
@@ -59,8 +60,8 @@ export default function FundNetwork() {
         <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Manage deposits and withdrawals</summary>
         <div className="mt-3 grid gap-2 text-xs text-slate-300">
           <p>Open Fund tools to issue a deposit address, confirm a deposit, or request a withdrawal.</p>
+          {account?.username ? <FundActions key={account.username} positions={account.positions} /> : <p>Sign in with your Explorer account using the profile button to manage deposits and withdrawals.</p>}
           <p>Already paid to a legacy deposit address that isn’t linked to your account? <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Legacy%20Fund%20deposit%20review">Request manual review</a> with your transaction hash, deposit address, and position reference if available.</p>
-          <a className="justify-self-start rounded border border-cyan-800 px-2.5 py-1.5 font-medium text-cyan-100" href="https://usddd.digdug.do/fund?legacy=1#positions" target="_blank" rel="noreferrer">Open Fund tools ↗</a>
         </div>
       </details>
       <details id="positions" open className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
