@@ -24,6 +24,8 @@ async function post(path: string, body: object) {
 export default function FundAccess() {
   const [mode, setMode] = useState<"login" | "start" | "finish">("login");
   const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string } | null>(null);
+  const [explorerEnrollment, setExplorerEnrollment] = useState(false);
+  const [explorer, setExplorer] = useState<{ username: string; badge: string } | null>(null);
   const [positions, setPositions] = useState<Position[] | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,9 +33,17 @@ export default function FundAccess() {
   async function loadPositions() {
     const data = await post("positions", { authenticator: true });
     setPositions(data.positions);
+    setExplorer(data.explorer ?? null);
   }
 
-  useEffect(() => { void loadPositions().catch(() => {}); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadPositions().catch(() => {});
+    void fetch("/api/fund/authenticator", { cache: "no-store", signal: controller.signal })
+      .then(async response => { if (response.ok) setExplorerEnrollment((await response.json()).explorerEnrollment === true); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,6 +82,7 @@ export default function FundAccess() {
     try {
       await post("authenticator", { action: "signout" });
       setPositions(null);
+      setExplorer(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Sign-out failed.");
     } finally { setBusy(false); }
@@ -85,6 +96,7 @@ export default function FundAccess() {
       <p className="mt-2 text-sm text-slate-300">Read-only Authenticator pilot for invited accounts. Use Fund Network for deposit and withdrawal requests.</p>
     </header>
     {positions ? <>
+      {explorer && <p className="mt-6 text-sky-300">{explorer.username} · {explorer.badge}</p>}
       <h2 className="mt-6 text-xl">Your positions</h2>
       {positions.length === 0 && <p className="mt-3">No positions are linked to this account.</p>}
       <ul className="my-4 space-y-3">{positions.map(position => <li key={position.id} className="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
@@ -96,10 +108,11 @@ export default function FundAccess() {
       <button type="button" disabled={busy} onClick={signOut} className="underline">Sign out</button>
     </> : <>
       <h2 className="mt-6 text-xl">{mode === "login" ? "Sign in" : mode === "start" ? "Set up Google Authenticator" : "Confirm your setup"}</h2>
-      {mode === "start" && <p className="mt-2 text-sm text-slate-300">Use your Terminal Pass once to link Google Authenticator to your username. Keep access to that Authenticator entry.</p>}
+      {mode === "start" && <p className="mt-2 text-sm text-slate-300">{explorerEnrollment ? "Choose a username. It’s also your display name. Invited Terminal users can enter their existing username and pass. New Explorers can leave the pass blank." : "Use your Terminal Pass once to link Google Authenticator to your username. Keep access to that Authenticator entry."}</p>}
       {mode === "login" && <p className="mt-2 text-sm text-slate-300">Enter your username and the current six-digit code from Google Authenticator.</p>}
       {pending && mode === "finish" && <div className="mt-3 space-y-3">
         <p>Scan this QR code in Google Authenticator, then enter the six-digit code below.</p>
+        <p className="text-amber-300">Keep the Authenticator entry for your username. You’ll use its current six-digit code to sign in on any device.</p>
         {/* The data URL contains the enrollment secret, so render it locally. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={pending.qrCode} alt="Scan to enroll in Fund Network" width={240} height={240} className="max-w-full rounded-md" />
@@ -109,7 +122,7 @@ export default function FundAccess() {
         {mode !== "finish" && <>
           <label>Username<input className={field} name="username" autoComplete="username" maxLength={100} required /></label>
         </>}
-        {mode === "start" && <label>Terminal Pass <span className="text-xs text-slate-400">(one-time setup)</span><input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
+        {mode === "start" && <label>Terminal Pass <span className="text-xs text-slate-400">{explorerEnrollment ? "(optional)" : "(one-time setup)"}</span><input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required={!explorerEnrollment} /></label>}
         {mode !== "start" && <label>Six-digit Authenticator code<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>}
         <button disabled={busy} className="rounded-md bg-sky-300 px-4 py-2 font-semibold text-slate-950">{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "start" ? "Continue to Authenticator" : "Verify and sign in"}</button>
         <p role="status" className="text-amber-300">{message}</p>
@@ -118,7 +131,7 @@ export default function FundAccess() {
         setPending(null);
         setMessage("");
         setMode(mode === "login" ? "start" : "login");
-      }}>{mode === "login" ? "Set up Google Authenticator" : "Back to sign-in"}</button>
+      }}>{mode === "login" ? "Set up account" : "Back to sign-in"}</button>
       <p className="mt-4 text-sm">Lost access to your Authenticator? Contact Fund support for manual review.</p>
     </>}
     {positions && <p role="status" className="mt-3 text-amber-300">{message}</p>}
