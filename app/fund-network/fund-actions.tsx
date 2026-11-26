@@ -67,6 +67,8 @@ export default function FundActions({ positions }: { positions: FundActionPositi
         setMessage("Deposit address created.");
       } else if (action === "confirm") {
         await request(action, { ref: depositRef, tx_hash: String(values.get("tx_hash") ?? "").trim() });
+        setIssued(undefined);
+        setDepositRef("");
         setMessage("Deposit confirmed. Check your position for its processing status.");
         form.reset();
       } else {
