@@ -49,10 +49,9 @@ export default async function ObservatoryPage() {
   const snapshot = await getSnapshot();
   const recentFinds = snapshot?.recentFinds ?? [];
   const captures = snapshot?.captures24h;
-  const partialWindow = captures && (snapshot?.updatedAt ?? Date.now()) - captures.trackingSince < 86400000;
   const metrics = [
     { label: "Active explorers now", icon: "◉", value: snapshot ? snapshot.activeDiggers + snapshot.bots : undefined },
-    { label: partialWindow ? "Recorded extractions · last 24h" : "Extractions · last 24h", icon: "⛏", value: captures?.extractions },
+    { label: "Extractions · last 24h", icon: "⛏", value: captures?.extractions },
     { label: "Golden Finds · last 24h", icon: "◆", value: captures?.goldenFinds },
     { label: "Golden signals now", icon: "◇", value: snapshot?.goldenSignals },
   ];
@@ -136,7 +135,9 @@ export default async function ObservatoryPage() {
           <p>Testnet rewards are simulated and cannot be withdrawn. After Mainnet launches, eligible Mainnet rewards will be real and withdrawable under the rules in effect at launch.</p>
           <details>
             <summary>Fair play</summary>
-            <p>Play fairly, respect other explorers, and report game issues through DIGDUG.DO.</p>
+            <p>Play using the controls provided in Flatverse. Player-operated bots, scripts, macros, auto-clickers, and other tools that automate gameplay, collect rewards, or manipulate rankings are prohibited.</p>
+            <p>Confirmed use of prohibited automation results in an immediate Flatverse account ban and forfeiture of all in-game rewards earned on that account.</p>
+            <p>Report suspected cheating, bugs, or other game issues to <a href="mailto:usddd@digdug.do">usddd@digdug.do</a>.</p>
           </details>
           <p>USDDD contract on BNB Smart Chain · <a href={`https://bscscan.com/token/${usdddContract}`}><code>{usdddContract}</code></a></p>
           <p>© {new Date().getUTCFullYear()} DIGDUG.DO</p>
