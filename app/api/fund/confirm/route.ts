@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createPublicClient, http, Hex, parseAbiItem, decodeEventLog, formatUnits } from "viem";
+
+import { isExplorerFundActionOrigin, resolveExplorerFundOwner } from "../../../fund/explorer-owner";
 
 function env(name: string, fallback?: string): string {
   const v = process.env[name];
@@ -15,7 +17,7 @@ function isHexTx(h: any): h is Hex {
 
 const TRANSFER_ABI_ITEM = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const j = await req.json().catch(() => ({} as any));
     const ref = typeof j?.ref === "string" ? j.ref.trim() : "";
@@ -37,9 +39,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, paused: true }, { status: 503 });
     }
 
-    // resolve terminal_user_id from dd_sessions (best-effort)
+    const native = j?.explorer === true;
+    const nativeEnabled = process.env.FUND_NATIVE_ACTIONS_ENABLED === "true";
     let terminalUserId: string | null = null;
-    if (sessionId) {
+    if (native) {
+      if (!nativeEnabled || !isExplorerFundActionOrigin(req)) return NextResponse.json({ error: "Explorer deposits are unavailable." }, { status: 403 });
+      terminalUserId = await resolveExplorerFundOwner(req, sb);
+      if (!terminalUserId) return NextResponse.json({ error: "Sign in to confirm a deposit." }, { status: 401 });
+    } else if (sessionId) {
       const { data: srow } = await sb
         .from("dd_sessions")
         .select("user_id")
@@ -61,6 +68,11 @@ export async function POST(req: Request) {
       .single();
 
     if (error || !pos) throw new Error("Position not found");
+
+    if (nativeEnabled) {
+      if (!pos.terminal_user_id) return NextResponse.json({ error: "Payments to unlinked legacy addresses require manual review." }, { status: 409 });
+      if (pos.terminal_user_id !== terminalUserId) return NextResponse.json({ error: "Position not found for this account." }, { status: 404 });
+    }
 
     // do not overwrite once set
     if (pos.deposit_tx_hash) {
@@ -142,21 +154,25 @@ export async function POST(req: Request) {
       funded_at: fundedAtIso,
       status: "funded_locked",
     };
-    if (terminalUserId) updatePayload.terminal_user_id = terminalUserId;
+    if (!nativeEnabled && terminalUserId) updatePayload.terminal_user_id = terminalUserId;
 
-    const { data: updRows, error: updErr } = await sb
+    const updateQuery = sb
       .from("fund_positions")
       .update(updatePayload)
       .eq("id", pos.id)
       .eq("status", "awaiting_funds")
-      .is("deposit_tx_hash", null)
-      .select("id");
+      .is("deposit_tx_hash", null);
+    const { data: updRows, error: updErr } = await (nativeEnabled ? updateQuery.eq("terminal_user_id", terminalUserId!) : updateQuery).select("id");
 
     if (updErr) throw updErr;
     if (!updRows || updRows.length === 0) throw new Error("Position updated by someone else");
 
+    if (native && process.env.VERCEL_ENV !== "production") {
+      return NextResponse.json({ ok: true, position_ref: ref, status: "funded_locked", preview: true });
+    }
+
     // Auto-sweep immediately after confirm
-    const origin = new URL(req.url).origin;
+    const origin = native ? process.env.FUND_AUTHENTICATOR_ORIGIN! : new URL(req.url).origin;
 
     const execSecret = process.env.FUND_WITHDRAW_EXEC_SECRET || "";
 
@@ -211,10 +227,10 @@ export async function POST(req: Request) {
       funded_at: fundedAtIso,
       terminal_user_id: terminalUserId,
       status: sweep?.ok ? "swept_locked" : "funded_locked",
-      sweep,
-      mint,
+      sweep: native ? { ok: Boolean(sweep?.ok) } : sweep,
+      mint: native ? { ok: Boolean(mint?.ok) } : mint,
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "confirm failed" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: typeof e?.message === "string" ? e.message : "Deposit confirmation failed." }, { status: 400 });
   }
 }
