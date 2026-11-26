@@ -8,6 +8,8 @@ type Snapshot = {
   bots: number;
   goldenSignals: number;
   updatedAt?: number;
+  worldActive?: boolean;
+  lastWorldTick?: number | null;
   regions?: { active: number; golden: number }[];
   captures24h?: { extractions: number; finds: number; valueCents: number; goldenFinds?: number; trackingSince: number; tokens: { symbol: string; amount: string }[] } | null;
   recentFinds?: { at: number; tokens: { symbol: string; amount: string; usdCents: number | null }[] }[];
@@ -53,6 +55,7 @@ export default async function ObservatoryPage() {
         </header>
         <section className="ob-hero"><h1>Flatverse <span>Observatory</span></h1><p>Practice World · Simulated rewards</p></section>
         {snapshot?.updatedAt != null && <p>Practice snapshot · {timestamp.format(snapshot.updatedAt)} UTC</p>}
+        {snapshot?.worldActive === false && <p className="ob-state">World idle · Simulated explorers resume when someone plays.{snapshot.lastWorldTick != null && <> Last game activity {timestamp.format(snapshot.lastWorldTick)} UTC.</>}</p>}
         {!snapshot && <p className="ob-state" role="status">Practice activity is temporarily unavailable.</p>}
         <dl className="ob-stats" aria-label="Practice World activity">
           {metrics.map(({label, icon, value}) => <div className="ob-stat" key={label}><i aria-hidden="true">{icon}</i><div><dt>{label}</dt><dd>{value ?? <span aria-label="Unavailable">—</span>}</dd></div></div>)}
