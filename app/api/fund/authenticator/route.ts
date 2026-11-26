@@ -80,7 +80,7 @@ export function GET() {
 
 async function enrollmentQr(secret: Buffer, username: string) {
   const manualKey = setupKey(secret);
-  const issuer = "DIGDUG.DO Fund Network";
+  const issuer = "DIGDUG.DO";
   const label = encodeURIComponent(issuer + ":" + username);
   const uri = "otpauth://totp/" + label + "?" + new URLSearchParams({ secret: manualKey, issuer });
   return { setupKey: manualKey, qrCode: await QRCode.toDataURL(uri, { width: 240 }) };
@@ -96,10 +96,13 @@ export async function POST(req: NextRequest) {
   if (!/^[a-f0-9]{64}$/i.test(secretKey) || !origin) {
     return json({ error: "Fund Authenticator is unavailable." }, 503);
   }
-  if (req.headers.get("origin") !== origin) return json({ error: "Open the official Fund sign-in page." }, 403);
   const key = Buffer.from(secretKey, "hex");
   const body = await req.json().catch(() => null);
   if (!body || typeof body !== "object") return json({ error: "Invalid request." }, 400);
+  const requestOrigin = req.headers.get("origin");
+  if (body.action === "redeem_play_ticket" ? requestOrigin !== null : requestOrigin !== origin) {
+    return json({ error: "Open an official DIGDUG.DO enrollment form." }, 403);
+  }
   const deny = () => json({ error: "Those details could not be verified." }, 401);
   const limited = () => json({ error: "Too many attempts. Try again in a few minutes." }, 429);
   try {
@@ -120,6 +123,45 @@ export async function POST(req: NextRequest) {
         if (error) throw error;
       }
       return withSession("");
+    }
+
+    if (body.action === "play_ticket" || body.action === "redeem_play_ticket") {
+      const sign = (payload: string) => createHmac("sha256", key).update("flatverse-play:" + payload).digest("hex");
+      let sessionHash: string;
+      if (body.action === "play_ticket") {
+        const session = req.cookies.get(cookieName)?.value;
+        if (!isToken(session)) return deny();
+        sessionHash = hash(session);
+      } else {
+        if (typeof body.ticket !== "string" || !/^\d{13}\.[a-f0-9]{64}\.[a-f0-9]{64}\.[a-f0-9]{64}$/.test(body.ticket)) return deny();
+        const [deadline, session, nonce, signature] = body.ticket.split(".");
+        const payload = [deadline, session, nonce].join(".");
+        if (Number(deadline) < Date.now() ||
+          !timingSafeEqual(Buffer.from(sign(payload), "hex"), Buffer.from(signature, "hex"))) return deny();
+        sessionHash = session;
+      }
+      const { data: session, error: sessionError } = await db.from("fund_authenticator_sessions")
+        .select("terminal_user_id,expires_at").eq("token_hash", sessionHash)
+        .gt("expires_at", new Date().toISOString()).maybeSingle();
+      if (sessionError) throw sessionError;
+      if (!session) return deny();
+      if (body.action === "play_ticket") {
+        const payload = [Date.now() + 60000, sessionHash, token()].join(".");
+        return json({ ticket: payload + "." + sign(payload) });
+      }
+      const id = session.terminal_user_id;
+      const [legacy, funded] = await Promise.all([
+        db.from("dd_terminal_users").select("username").eq("id", id).maybeSingle(),
+        db.from("fund_positions").select("id").eq("terminal_user_id", id).gt("funded_usdt", 0).limit(1).maybeSingle(),
+      ]);
+      if (legacy.error || funded.error) throw legacy.error || funded.error;
+      const explorer = legacy.data ? null : await db.from("flatverse_usernames").select("display_name")
+        .eq("account_id", id).eq("source", "explorer").maybeSingle();
+      if (explorer?.error) throw explorer.error;
+      const username = legacy.data?.username ?? explorer?.data?.display_name;
+      if (!username) return deny();
+      const startingCredit = legacy.data ? funded.data ? 50 : 25 : 10;
+      return json({ id, username, startingCredit, expiresAt: session.expires_at });
     }
 
     const client = req.headers.get("x-vercel-forwarded-for")?.split(",")[0].trim() || "unknown";
@@ -147,7 +189,7 @@ export async function POST(req: NextRequest) {
         if (verifyError) throw verifyError;
         return data ? withSession(session) : json({ error: "That username is no longer available. Go back and try again." }, 409);
       }
-      if (!pending || pending.terminal_user_id !== pilotOwner) return deny();
+      if (!pending || (!explorerEnabled && pending.terminal_user_id !== pilotOwner)) return deny();
       const step = acceptedStep(open(pending.encrypted_secret, key, pending.terminal_user_id), body.code);
       if (step === null) return deny();
       const session = token();
@@ -190,7 +232,7 @@ export async function POST(req: NextRequest) {
       ? await users.select("id,pass_hash,twofa_enabled").eq("username", username).maybeSingle()
       : await users.select("id").eq("username", username).maybeSingle();
     if (userError) throw userError;
-    let accountId = user && user.id === pilotOwner ? user.id : null;
+    let accountId = user && (explorerEnabled || user.id === pilotOwner) ? user.id : null;
     if (!accountId && !enrolling && explorerEnabled) {
       const { data: player, error } = await db.from("flatverse_usernames").select("account_id")
         .eq("source", "explorer").eq("username_key", username.toLowerCase()).maybeSingle();
