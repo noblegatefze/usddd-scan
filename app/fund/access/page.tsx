@@ -158,9 +158,12 @@ export default function FundAccess() {
 
   const field = "block w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2";
   if (homeWizard) {
-    const primary = "w-full rounded-md bg-amber-400 px-4 py-2.5 font-semibold text-slate-950 hover:bg-amber-300 disabled:opacity-50";
-    const link = "text-sm text-cyan-200 underline underline-offset-4";
-    const step = "text-sm font-medium text-cyan-200";
+    const primary = "w-full rounded-md bg-amber-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-300 disabled:opacity-50";
+    const heading = "text-base font-semibold leading-snug text-slate-100";
+    const control = "block w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-xs focus-visible:outline-2 focus-visible:outline-cyan-300";
+    const card = "grid gap-1.5 rounded-lg border border-slate-700 bg-slate-950/35 p-3";
+    const link = "text-xs text-cyan-200 underline underline-offset-4";
+    const step = "text-xs font-medium text-cyan-200";
     function show(next: "login" | "new" | "legacy") {
       setMode(next);
       setWizardScreen("form");
@@ -171,11 +174,11 @@ export default function FundAccess() {
       setMessage("");
       setWizardScreen("setup");
     }
-    const back = <button type="button" className={link} onClick={() => show("login")}>Back to sign in</button>;
-    const code = <label className="grid gap-1.5">Authenticator PIN<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>;
-    return <main id="home-account-wizard" className="mx-auto grid max-w-md gap-4 bg-[#071c2f] px-5 py-5 text-slate-100">
+    const back = <button type="button" className={link + " justify-self-start"} onClick={() => show("login")}>← Back to sign in</button>;
+    const code = <label className="grid gap-1.5 text-xs font-medium">Authenticator PIN<input className={control} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>;
+    return <main id="home-account-wizard" className="mx-auto grid max-w-md gap-3 bg-[#071c2f] p-4 text-xs leading-relaxed text-slate-100">
       {wizardScreen === "complete" ? <>
-        <h1 className="text-xl font-semibold">{pending?.badge ? "Migration complete" : "Account ready"}</h1>
+        <h1 className={heading}>{pending?.badge ? "Migration complete" : "Account ready"}</h1>
         {pending?.badge && <p>{pending.badge}</p>}
         <p>{pending?.startingCredit ?? 10} USDDD Practice World starting credit</p>
         <a className={primary + " block text-center"} href="https://play.digdug.do/" target="_blank" rel="noreferrer">Play Flatverse</a>
@@ -189,52 +192,53 @@ export default function FundAccess() {
         signOut={signOut}
         onAvatar={updateAvatar}
       /> : wizardScreen === "forgot" ? <>
-        <h1 className="text-xl font-semibold">Recover access</h1>
-        <section className="grid gap-2 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
-          <h2 className="font-semibold">Legacy Terminal users</h2>
-          <p className="text-sm">You need your Terminal username and Terminal Pass to set up your Explorer account. Go back to the Legacy Terminal to try to remember them.</p>
+        <h1 className={heading}>Recover access</h1>
+        <section className={card}>
+          <h2 className="font-semibold text-cyan-100">Legacy Terminal users</h2>
+          <p className="text-xs">Use your Terminal username and Terminal Pass to set up your Explorer account.</p>
           <a className={link} href="https://www.digdug.do/legacy-terminal" target="_blank" rel="noreferrer">Go to Legacy Terminal</a>
         </section>
-        <section className="grid gap-2 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
-          <h2 className="font-semibold">Lost Authenticator PIN</h2>
-          <p className="text-sm">Recover access using your Authenticator app key or email <a className={link} href="mailto:usddd@digdug.do">usddd@digdug.do</a> to request manual recovery. Recovery is not guaranteed.</p>
+        <section className={card}>
+          <h2 className="font-semibold text-cyan-100">Lost Authenticator PIN</h2>
+          <p className="text-xs">Restore your account in the Authenticator app using your setup key, or request manual recovery. Recovery is not guaranteed.</p>
+          <p><a className={link} href="mailto:usddd@digdug.do">Email usddd@digdug.do</a></p>
         </section>
         {back}
       </> : wizardScreen === "setup" ? <>
-        <h1 className="text-xl font-semibold">Setup account</h1>
+        <h1 className={heading}>Setup account</h1>
         <p>Do you remember your Legacy Terminal username and Terminal Pass?</p>
         <div className="grid grid-cols-2 gap-3">
           <button type="button" className={primary} onClick={() => show("legacy")}>Yes</button>
-          <button type="button" className="rounded-md border border-cyan-500 px-4 py-2.5 font-semibold text-cyan-200 hover:bg-cyan-950" onClick={() => show("new")}>Skip</button>
+          <button type="button" className="rounded-md border border-cyan-700 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-950" onClick={() => show("new")}>Skip</button>
         </div>
-        <p className="text-sm text-amber-200">By skipping, you may be forfeiting bonus USDDD rewards on account creation.</p>
+        <p className="text-xs text-amber-200">By skipping, you may be forfeiting bonus USDDD rewards on account creation.</p>
         {back}
       </> : wizardScreen === "qr" && pending ? <>
-        <h1 className="text-xl font-semibold">Set up Google Authenticator</h1>
+        <h1 className={heading}>Set up Google Authenticator</h1>
         <p className={step}>Step 2 of 3</p>
         {pending.badge && <p>{pending.badge} · {pending.startingCredit} USDDD Practice World starting credit</p>}
         <p>Scan this code in Google Authenticator.</p>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={pending.qrCode} width={200} height={200} alt="Google Authenticator setup QR code" className="mx-auto max-w-full rounded-md" />
+        <img src={pending.qrCode} width={176} height={176} alt="Google Authenticator setup QR code" className="mx-auto max-w-full rounded-md" />
         <details><summary className={link}>Use a setup key instead</summary><code className="block break-all py-2">{pending.setupKey}</code></details>
         <button type="button" className={primary} onClick={() => setWizardScreen("form")}>Continue</button>
       </> : <>
         {mode !== "login" && <>
-          <h1 className="text-xl font-semibold">{mode === "legacy" ? "Migrating from the Legacy Terminal" : mode === "new" ? "Create your account" : "Verify your Authenticator"}</h1>
+          <h1 className={heading}>{mode === "legacy" ? "Migrating from the Legacy Terminal" : mode === "new" ? "Create your account" : "Verify your Authenticator"}</h1>
           <p className={step}>Step {mode === "finish" ? 3 : 1} of 3</p>
         </>}
-        <form key={mode} onSubmit={submit} className="grid gap-4">
-          {mode !== "finish" && <label className="grid gap-1.5">{mode === "new" ? "Choose a username" : "Username"}<input className={field} name="username" autoComplete="username" maxLength={100} pattern={"[^\\s]+"} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\s+/gu, ""); }} required /></label>}
-          {mode === "legacy" && <label className="grid gap-1.5">Terminal Pass<input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
+        <form key={mode} onSubmit={submit} className="grid gap-3">
+          {mode !== "finish" && <label className="grid gap-1.5 text-xs font-medium">{mode === "new" ? "Choose a username" : "Username"}<input className={control} name="username" autoComplete="username" maxLength={100} pattern={"[^\\s]+"} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\s+/gu, ""); }} required /></label>}
+          {mode === "legacy" && <label className="grid gap-1.5 text-xs font-medium">Terminal Pass<input className={control} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
           {(mode === "login" || mode === "finish") && code}
-          {mode === "new" && explorerEnrollment && <p className="text-sm text-slate-300">Player-operated bots, scripts, macros, and other gameplay automation are prohibited. <a className={link} href="https://play.digdug.do/#game-rules" target="_blank" rel="noreferrer">Read the game rules</a>.</p>}
-          {mode === "new" && !explorerEnrollment && <p className="text-sm text-amber-300">Public Explorer enrollment is pending.</p>}
+          {mode === "new" && explorerEnrollment && <p className="text-xs text-slate-300">Player-operated bots, scripts, macros, and other gameplay automation are prohibited. <a className={link} href="https://play.digdug.do/#game-rules" target="_blank" rel="noreferrer">Read the game rules</a>.</p>}
+          {mode === "new" && !explorerEnrollment && <p className="text-xs text-amber-300">Public Explorer enrollment is pending.</p>}
           <button className={primary} disabled={busy || (mode === "new" && !explorerEnrollment)}>{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "finish" ? "Verify and sign in" : "Continue"}</button>
         </form>
-        {mode === "login" ? <div className="flex justify-between border-t border-slate-600 pt-3"><button type="button" className={link} disabled={busy} onClick={openSetup}>Setup account</button><button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("forgot"); }}>Forgot</button></div>
+        {mode === "login" ? <div className="flex justify-between border-t border-slate-700 pt-2.5"><button type="button" className={link} disabled={busy} onClick={openSetup}>Setup account</button><button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("forgot"); }}>Forgot</button></div>
           : mode === "finish" ? <button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("qr"); }}>Back to QR code</button> : <button type="button" className={link} disabled={busy} onClick={openSetup}>Back to setup</button>}
       </>}
-      {message && <p role="status" className="text-sm text-amber-300">{message}</p>}
+      {message && <p role="status" className="rounded-md border border-amber-300/25 bg-amber-900/15 px-3 py-2 text-xs text-amber-200">{message}</p>}
     </main>;
   }
   return <main className="mx-auto max-w-3xl bg-[#071c2f] px-5 py-5 text-slate-100">
