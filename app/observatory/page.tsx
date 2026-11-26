@@ -6,10 +6,12 @@ type Snapshot = {
   activeDiggers: number;
   bots: number;
   goldenSignals: number;
+  updatedAt?: number;
+  regions?: { active: number; golden: number }[];
   extractionCount?: number;
   extractionTrackingSince?: number | null;
   recentFinds?: { at: number; tokens: { symbol: string; amount: string; usdCents: number | null }[] }[];
-  leaderboard: { name: string; bot: boolean; score: number }[];
+  leaderboard: { name: string; bot: boolean; score: number; runs?: number }[];
 };
 
 async function getSnapshot(): Promise<Snapshot | null> {
@@ -46,6 +48,7 @@ export default async function ObservatoryPage() {
           </nav>
         </header>
         <section className="ob-hero"><h1>Flatverse <span>Observatory</span></h1><p>Practice World · Simulated rewards</p></section>
+        {snapshot?.updatedAt != null && <p>Practice snapshot · {timestamp.format(snapshot.updatedAt)} UTC</p>}
         {!snapshot && <p className="ob-state" role="status">Practice activity is temporarily unavailable.</p>}
         <dl className="ob-stats" aria-label="Practice World activity">
           {metrics.map(({label, icon, value}) => <div className="ob-stat" key={label}><i aria-hidden="true">{icon}</i><div><dt>{label}</dt><dd>{value ?? <span aria-label="Unavailable">—</span>}</dd></div></div>)}
@@ -53,7 +56,10 @@ export default async function ObservatoryPage() {
         <div className="ob-grid">
           <section className="ob-panel">
             <h2>World map <small>· Flatverse mine cross-section</small></h2>
-            <div className="ob-map" aria-label="Illustrated cross-section of the Flatverse mine"><div className="ob-regions"><span>Americas</span><span>Arabian<br/>Peninsula</span><span>Pacific</span></div></div>
+            <div className="ob-map" aria-label="Illustrated cross-section of the Flatverse mine"><div className="ob-regions">{["Americas", "Arabian Peninsula", "Pacific"].map((name, index) => {
+                const region = snapshot?.regions?.[index];
+                return <span key={name}>{name}{region && <small style={{display:"block",fontSize:12,marginTop:5}}>{region.active} active · {region.golden} golden</small>}</span>;
+              })}</div></div>
           </section>
           <div className="ob-side">
             <section className="ob-panel">
@@ -77,8 +83,8 @@ export default async function ObservatoryPage() {
                 </ol>
               ) : <p>{snapshot?.recentFinds ? "No practice extractions recorded yet." : "Practice extraction activity is temporarily unavailable."}</p>}
             </section>
-            <section className="ob-panel"><h2>Daily practice ranks</h2><p>Top five · Resets at 00:00 UTC</p>
-              {snapshot?.leaderboard.length ? <ol className="ob-board">{snapshot.leaderboard.slice(0, 5).map((actor, index) => <li key={index}><span>{index + 1}.</span><span>{actor.name}</span><strong>${(actor.score / 100).toFixed(2)}</strong></li>)}</ol> : <p>No standings available.</p>}
+            <section className="ob-panel"><h2>Daily practice ranks</h2><p>Top ten · Resets at 00:00 UTC</p>
+              {snapshot?.leaderboard.length ? <ol className="ob-board">{snapshot.leaderboard.slice(0, 10).map((actor, index) => <li key={index}><span>{index + 1}.</span><span>{actor.name}{actor.runs != null && <small> · {actor.runs} runs</small>}</span><strong>${(actor.score / 100).toFixed(2)}</strong></li>)}</ol> : <p>No standings available.</p>}
             </section>
           </div>
         </div>
