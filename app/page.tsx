@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import LiveRefresh, { RankResetCountdown } from "./observatory/live-refresh";
 
 export const metadata = { title: "Flatverse Observatory | DIGDUG.DO", alternates: { canonical: "https://usddd.digdug.do/" } };
@@ -41,7 +40,7 @@ const tokenLogos: Record<string, string> = {
   "ZAMA": "https://a.storyblok.com/f/176646/512x512/d9d1cbda2b/zama.png"
 };
 const usdddContract = "0x03f65216F340bAC39c8d1911288B1c7CA071e9c3";
-const dispatch = "https://www.digdug.do/surface-dispatch";
+const dispatch = "https://feed.digdug.do/";
 const play = "https://play.digdug.do/";
 const timestamp = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
 
@@ -67,7 +66,7 @@ export default async function ObservatoryPage() {
           <nav className="ob-nav" aria-label="Observatory">
             <a href="https://www.digdug.do/">Home</a>
             <a href={dispatch}>Surface Dispatch</a>
-            <Link href="/fund">Fund Network</Link>
+            <a href="https://fund.digdug.do/">Fund Network</a>
             <span className="ob-testnet" title="Testnet rewards are simulated. Eligible Mainnet rewards will be real and withdrawable after launch.">Live - Testnet</span>
             <a className="ob-play" href={play}>Play Flatverse</a>
           </nav>
@@ -126,7 +125,7 @@ export default async function ObservatoryPage() {
             </section>
             <div className="ob-lower">
               <section className="ob-panel"><a href={dispatch}>Surface Dispatch ›</a><p>Launches, maintenance, and field updates.</p></section>
-              <section className="ob-panel"><Link href="/fund">Back Exploration ›</Link><p>Explore backing options on Fund Network.</p></section>
+              <section className="ob-panel"><a href="https://fund.digdug.do/">Back Exploration ›</a><p>Explore backing options on Fund Network.</p></section>
             </div>
             <a className="ob-play ob-play-large" href={play}>Play Flatverse <span aria-hidden="true">›</span></a>
           </div>
