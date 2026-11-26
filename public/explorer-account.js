@@ -13,6 +13,10 @@
     .dd-account-nav > [data-explorer-account]{margin-inline-start:0}
     #gameFocus .dd-account-nav > #siteMenu{margin-inline-start:0}
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
+    .dd-account-avatar{position:relative}
+    .dd-account-avatar-image{width:65%;height:65%;object-fit:cover;border-radius:50%;opacity:.6}
+    .dd-account-avatar-image[data-custom]{width:100%;height:100%;opacity:1}
+    .dd-account-avatar-badge{position:absolute;right:-4px;top:-4px;display:grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid #0b1e30;background:#f8cd67;color:#101b26;font-size:11px}
     .dd-account-avatar:focus-visible,.dd-account-close:focus-visible{outline:2px solid #ffdb4d;outline-offset:3px}
     .dd-account-dialog{position:fixed;inset:0;margin:auto;width:min(660px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:1px solid #4bbbce;border-radius:12px;background:#071c2f;color:#effbff}
     .dd-account-dialog::backdrop{background:#020c19bb}
@@ -66,6 +70,33 @@
     if (!response.ok) throw new Error("Play sign-in unavailable");
   };
   let username;
+  let avatarDetails;
+  const avatarColors = {violet:"#482875",teal:"#06565b",amber:"#714610",blue:"#1f457e",rose:"#782d54",green:"#2a5636"};
+  function paintAvatar() {
+    button.style.backgroundColor = "";
+    if (!username) {
+      button.innerHTML = icon;
+      return;
+    }
+    if (!avatarDetails || avatarDetails.username !== username || !dialog.hasAttribute("data-home-wizard")) {
+      button.textContent = Array.from(username)[0]?.toUpperCase() || "?";
+      return;
+    }
+    const {avatar,badge} = avatarDetails;
+    const custom = /^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar) && avatar.length <= 49152;
+    const image = document.createElement("img");
+    image.alt = "";
+    image.className = "dd-account-avatar-image";
+    image.toggleAttribute("data-custom",custom);
+    image.src = custom ? avatar : "https://play.digdug.do/favicon.svg";
+    button.style.backgroundColor = Object.hasOwn(avatarColors,avatar) ? avatarColors[avatar] : avatarColors.blue;
+    const emblem = document.createElement("span");
+    emblem.className = "dd-account-avatar-badge";
+    emblem.title = badge;
+    emblem.setAttribute("aria-hidden","true");
+    emblem.textContent = badge === "Legacy Backer Badge" ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
+    button.replaceChildren(image,emblem);
+  }
   let playStatus = "unknown";
   window.addEventListener("message", async event => {
     if (event.origin !== accountOrigin || event.source !== frame.contentWindow) return;
@@ -75,12 +106,18 @@
         dialog.style.setProperty("--account-height", Math.min(700, Math.max(160, Math.ceil(height))) + "px");
       }
     }
+    if (event.data?.type === "flatverse-avatar" && dialog.hasAttribute("data-home-wizard") &&
+        typeof event.data.username === "string" && typeof event.data.avatar === "string" &&
+        ["Legacy Backer Badge","Legacy Badge","Explorer"].includes(event.data.badge)) {
+      avatarDetails = event.data;
+      paintAvatar();
+    }
     if (event.data?.type === "flatverse-profile") {
       username = typeof event.data.username === "string" ? event.data.username : null;
       button.setAttribute("aria-label", username ? "Explorer account: " + username : "Explorer account");
       button.title = username || "Sign in or enroll";
-      if (username) button.textContent = Array.from(username)[0]?.toUpperCase() || "?";
-      else button.innerHTML = icon;
+      if (!username) avatarDetails = undefined;
+      paintAvatar();
       if (!play || linking) return;
       if (username && linkedUser !== username) {
         linking = true;
@@ -131,6 +168,7 @@
     const target = document.querySelector("[data-explorer-account]");
     if (target && button.parentElement !== target) {
       syncView();
+      paintAvatar();
       target.append(button);
     }
     if (!target && dialog.open) dialog.close();
