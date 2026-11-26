@@ -43,6 +43,8 @@ export async function POST(req: Request) {
       .from("fund_positions")
       .update({ terminal_user_id: sess.user_id })
       .in("position_ref", refs)
+      // Explorer-issued references are owned at issuance.
+      .not("position_ref", "like", "FN-%")
       .select("position_ref");
 
     if (updErr) throw updErr;
