@@ -44,7 +44,7 @@ export default function FundNetwork() {
   }
 
   return <main className="min-h-screen bg-[#04111e] px-4 py-5 text-slate-100 sm:px-8">
-    <div className="mx-auto grid max-w-[1420px] gap-4">
+    <div className="mx-auto grid max-w-[1420px] grid-cols-1 gap-4">
       <header className="flex flex-wrap items-center justify-between gap-[13px] rounded-[7px] border border-[#3dd9ef] bg-[#051c2c] px-[18px] py-3 font-[Arial,Helvetica,sans-serif] max-[760px]:px-2.5 max-[760px]:py-2">
         <a href="https://digdug.do/" className="text-[clamp(19px,2.4vw,31px)] font-black tracking-[-0.035em] hover:underline">
           DIGDUG.DO <span className="text-[0.71em] text-[#7defff]">/ FUND NETWORK</span>
