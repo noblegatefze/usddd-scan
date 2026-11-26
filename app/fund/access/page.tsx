@@ -45,7 +45,9 @@ export default function FundAccess() {
     try {
       const data = await post("authenticator", mode === "finish"
         ? { action: mode, challenge: pending?.challenge, code: fields.get("code") }
-        : { action: mode, username: fields.get("username"), pass: fields.get("pass"), code: fields.get("code") });
+        : mode === "start"
+          ? { action: mode, username: fields.get("username"), pass: fields.get("pass") }
+          : { action: mode, username: fields.get("username"), code: fields.get("code") });
       form.reset();
       if (mode === "start") {
         setPending(data);
@@ -94,6 +96,8 @@ export default function FundAccess() {
       <button type="button" disabled={busy} onClick={signOut} className="underline">Sign out</button>
     </> : <>
       <h2 className="mt-6 text-xl">{mode === "login" ? "Sign in" : mode === "start" ? "Set up Google Authenticator" : "Confirm your setup"}</h2>
+      {mode === "start" && <p className="mt-2 text-sm text-slate-300">Use your Terminal Pass once to link Google Authenticator to your username. Keep access to that Authenticator entry.</p>}
+      {mode === "login" && <p className="mt-2 text-sm text-slate-300">Enter your username and the current six-digit code from Google Authenticator.</p>}
       {pending && mode === "finish" && <div className="mt-3 space-y-3">
         <p>Scan this QR code in Google Authenticator, then enter the six-digit code below.</p>
         {/* The data URL contains the enrollment secret, so render it locally. */}
@@ -103,9 +107,9 @@ export default function FundAccess() {
       </div>}
       <form key={mode} onSubmit={submit} className="my-4 grid gap-3">
         {mode !== "finish" && <>
-          <label>Terminal username<input className={field} name="username" autoComplete="username" maxLength={100} required /></label>
-          <label>Terminal Pass<input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>
+          <label>Username<input className={field} name="username" autoComplete="username" maxLength={100} required /></label>
         </>}
+        {mode === "start" && <label>Terminal Pass <span className="text-xs text-slate-400">(one-time setup)</span><input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
         {mode !== "start" && <label>Six-digit Authenticator code<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>}
         <button disabled={busy} className="rounded-md bg-sky-300 px-4 py-2 font-semibold text-slate-950">{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "start" ? "Continue to Authenticator" : "Verify and sign in"}</button>
         <p role="status" className="text-amber-300">{message}</p>

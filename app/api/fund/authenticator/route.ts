@@ -130,19 +130,25 @@ export async function POST(req: NextRequest) {
 
     if (body.action !== "start" && body.action !== "login") return json({ error: "Invalid request." }, 400);
     const username = typeof body.username === "string" ? body.username.trim() : "";
-    if (!username || username.length > 100 || typeof body.pass !== "string" || !body.pass || body.pass.length > 256) return deny();
+    if (!username || username.length > 100) return deny();
+    const enrolling = body.action === "start";
+    if (enrolling && (typeof body.pass !== "string" || !body.pass || body.pass.length > 256)) return deny();
+    if (!enrolling && (typeof body.code !== "string" || !/^[0-9]{6}$/.test(body.code))) return deny();
     if (!await allow("account:" + username.toLowerCase(), 8)) return limited();
-    const { data: user, error: userError } = await db.from("dd_terminal_users")
-      .select("id,pass_hash,twofa_enabled").eq("username", username).maybeSingle();
+    const users = db.from("dd_terminal_users");
+    const { data: user, error: userError } = enrolling
+      ? await users.select("id,pass_hash,twofa_enabled").eq("username", username).maybeSingle()
+      : await users.select("id").eq("username", username).maybeSingle();
     if (userError) throw userError;
-    if (!user || user.id !== pilotOwner || !isToken(user.pass_hash) ||
-        !timingSafeEqual(Buffer.from(user.pass_hash, "hex"), Buffer.from(hash(body.pass), "hex"))) return deny();
+    if (!user || user.id !== pilotOwner) return deny();
     const { data: credential, error: credentialError } = await db.from("fund_authenticator_credentials")
       .select("encrypted_secret").eq("terminal_user_id", user.id).maybeSingle();
     if (credentialError) throw credentialError;
-    if (body.action === "start") {
+    if (enrolling) {
+      if (!("pass_hash" in user) || !isToken(user.pass_hash) ||
+          !timingSafeEqual(Buffer.from(user.pass_hash, "hex"), Buffer.from(hash(body.pass), "hex"))) return deny();
       if (credential) return json({ error: "Fund Authenticator is already set up. Sign in or contact support." }, 409);
-      if (user.twofa_enabled) return json({ error: "Contact support to migrate your existing Terminal two-factor authentication." }, 409);
+      if (!("twofa_enabled" in user) || user.twofa_enabled) return json({ error: "Contact support to migrate your existing Terminal two-factor authentication." }, 409);
       const secret = randomBytes(20);
       const manualKey = setupKey(secret);
       const issuer = "DIGDUG.DO Fund Network";
