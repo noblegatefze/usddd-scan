@@ -30,12 +30,12 @@ async function getSnapshot(): Promise<Snapshot | null> {
 const tokenLogos: Record<string, string> = {
   "BONK": "https://www.datocms-assets.com/107373/1762535859-bonk-logo-photoshop.png",
   "CAKE": "https://s2.coinmarketcap.com/static/img/coins/64x64/7186.png",
-  "FARTCOIN": "https://images.cryptorank.io/coins/fartcoin1729526044230.png",
+  "FARTCOIN": "https://s2.coinmarketcap.com/static/img/coins/64x64/33597.png",
   "GMX": "https://s3.coinmarketcap.com/static-gravity/image/b061524525524183a2dd28f4a4447b3f.png",
   "GRASS": "https://img.bitgetimg.com/multiLang/coinPriceLogo/grass.jpeg",
   "JUP": "https://images.seeklogo.com/logo-png/60/1/jupiter-jup-logo-png_seeklogo-609611.png",
   "RIVER": "https://appeco.galxe.com/galxe/space/logo/tooljet/1747971757541-River-icon-1.png",
-  "SAND": "https://img.cryptorank.io/coins/sandbox1596726908166.png",
+  "SAND": "https://s2.coinmarketcap.com/static/img/coins/64x64/6210.png",
   "USDDD": "https://node1.irys.xyz/VgrQwzSwqrwi_lElCIaM3UUf7Jv627Nqe5h5iZNb8RI",
   "VSN": "https://cdn.bitpanda.com/logos/v4/asset/light/1f051b7c-5980-6dda-9d3d-cf107d8d4bfb.png?t=3",
   "ZAMA": "https://a.storyblok.com/f/176646/512x512/d9d1cbda2b/zama.png"
