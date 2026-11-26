@@ -22,7 +22,7 @@ async function post(path: string, body: object) {
   return data;
 }
 
-const accountSites = new Set(["https://www.digdug.do", "https://digdug.do", "https://usddd.digdug.do", "https://play.digdug.do", "https://feed.digdug.do", "https://fund.digdug.do"]);
+const accountSites = new Set(["https://www.digdug.do", "https://digdug.do", "https://usddd.digdug.do", "https://play.digdug.do", "https://feed.digdug.do", "https://fund.digdug.do", "https://old.digdug.do"]);
 
 function parentSite() {
   if (window.parent === window || !document.referrer) return null;
