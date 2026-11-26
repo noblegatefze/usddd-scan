@@ -18,7 +18,7 @@
         align-items:center;column-gap:8px;row-gap:8px
       }
       header > .dd-account-nav:has(> nav){display:contents}
-      header > .dd-account-nav:has(> nav) > nav{
+      header > .dd-account-nav > :is(nav,.site-nav,.ob-nav){
         grid-column:1 / -1;grid-row:2;display:flex;flex-wrap:wrap;
         justify-content:flex-start;width:100%;min-width:0;max-width:100%;gap:7px 12px
       }
