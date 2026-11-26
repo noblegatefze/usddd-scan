@@ -37,6 +37,8 @@ function notifyParent(message: object) {
 export default function FundAccess() {
   const [mode, setMode] = useState<"login" | "new" | "legacy" | "finish">("login");
   const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string; badge?: string; startingCredit?: number } | null>(null);
+  const [homeWizard, setHomeWizard] = useState(false);
+  const [wizardScreen, setWizardScreen] = useState<"form" | "qr" | "complete" | "forgot">("form");
   const [embedded, setEmbedded] = useState(false);
   const [sessionChannel, setSessionChannel] = useState<BroadcastChannel | null>(null);
   const [explorerEnrollment, setExplorerEnrollment] = useState(false);
@@ -54,6 +56,7 @@ export default function FundAccess() {
 
   useEffect(() => {
     setEmbedded(window.parent !== window);
+    setHomeWizard(new URLSearchParams(window.location.search).get("view") === "home");
     const controller = new AbortController();
     const refresh = () => void loadPositions().catch((error) => {
       if (error?.status === 401) {
@@ -99,9 +102,15 @@ export default function FundAccess() {
       if (mode === "new" || mode === "legacy") {
         setPending(data);
         setMode("finish");
+        if (homeWizard) setWizardScreen("qr");
       } else {
-        setPending(null);
-        setMode("login");
+        if (homeWizard && mode === "finish") {
+          setPending(pending ? { ...pending, setupKey: "", qrCode: "", challenge: "" } : null);
+          setWizardScreen("complete");
+        } else {
+          setPending(null);
+          setMode("login");
+        }
         await loadPositions();
         sessionChannel?.postMessage("refresh");
       }
@@ -121,6 +130,9 @@ export default function FundAccess() {
       await post("authenticator", { action: "signout" });
       setPositions(null);
       setExplorer(null);
+      setPending(null);
+      setMode("login");
+      setWizardScreen("form");
       notifyParent({ type: "flatverse-profile", username: null });
       sessionChannel?.postMessage("refresh");
     } catch (error) {
@@ -129,6 +141,63 @@ export default function FundAccess() {
   }
 
   const field = "block w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2";
+  if (homeWizard) {
+    const primary = "w-full rounded-md bg-amber-400 px-4 py-2.5 font-semibold text-slate-950 hover:bg-amber-300 disabled:opacity-50";
+    const link = "text-sm text-cyan-200 underline underline-offset-4";
+    const step = "text-sm font-medium text-cyan-200";
+    function show(next: "login" | "new" | "legacy") {
+      setMode(next);
+      setWizardScreen("form");
+      setPending(null);
+      setMessage("");
+    }
+    const back = <button type="button" className={link} onClick={() => show("login")}>Back to sign in</button>;
+    const code = <label className="grid gap-1.5">Authenticator PIN<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>;
+    return <main className="mx-auto grid max-w-md gap-4 bg-[#071c2f] px-5 py-5 text-slate-100">
+      {wizardScreen === "complete" ? <>
+        <h1 className="text-xl font-semibold">{pending?.badge ? "Migration complete" : "Account ready"}</h1>
+        {pending?.badge && <p>{pending.badge}</p>}
+        <p>{pending?.startingCredit ?? 10} USDDD Practice World starting credit</p>
+        <a className={primary + " block text-center"} href="https://play.digdug.do/" target="_blank" rel="noreferrer">Play Flatverse</a>
+        <button type="button" className={link} onClick={() => show("login")}>Back to account</button>
+      </> : positions ? <>
+        <h1 className="text-xl font-semibold">{explorer?.username ?? "Explorer account"}</h1>
+        {explorer?.badge && <p>{explorer.badge}</p>}
+        <a className={primary + " block text-center"} href="https://play.digdug.do/" target="_blank" rel="noreferrer">Play Flatverse</a>
+        <button type="button" className={link} onClick={signOut} disabled={busy}>Sign out</button>
+      </> : wizardScreen === "forgot" ? <>
+        <h1 className="text-xl font-semibold">Recover access</h1>
+        <p>Your Authenticator key is required to sign in. Email <a className={link} href="mailto:usddd@digdug.do">usddd@digdug.do</a> to request manual recovery.</p>
+        {back}
+      </> : wizardScreen === "qr" && pending ? <>
+        <h1 className="text-xl font-semibold">Set up Google Authenticator</h1>
+        <p className={step}>Step 2 of 3</p>
+        {pending.badge && <p>{pending.badge} · {pending.startingCredit} USDDD Practice World starting credit</p>}
+        <p>Scan this code in Google Authenticator.</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={pending.qrCode} width={200} height={200} alt="Google Authenticator setup QR code" className="mx-auto max-w-full rounded-md" />
+        <details><summary className={link}>Use a setup key instead</summary><code className="block break-all py-2">{pending.setupKey}</code></details>
+        <button type="button" className={primary} onClick={() => setWizardScreen("form")}>Continue</button>
+      </> : <>
+        {mode !== "login" && <>
+          <h1 className="text-xl font-semibold">{mode === "legacy" ? "Migrating from the Legacy Terminal" : mode === "new" ? "Create your account" : "Verify your Authenticator"}</h1>
+          <p className={step}>Step {mode === "finish" ? 3 : 1} of 3</p>
+        </>}
+        <form key={mode} onSubmit={submit} className="grid gap-4">
+          {mode !== "finish" && <label className="grid gap-1.5">{mode === "new" ? "Choose a username" : "Username"}<input className={field} name="username" autoComplete="username" maxLength={100} required /></label>}
+          {mode === "legacy" && <label className="grid gap-1.5">Terminal Pass<input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
+          {(mode === "login" || mode === "finish") && code}
+          {mode === "new" && explorerEnrollment && <p className="text-sm text-slate-300">Player-operated bots, scripts, macros, and other gameplay automation are prohibited. <a className={link} href="https://play.digdug.do/#game-rules" target="_blank" rel="noreferrer">Read the game rules</a>.</p>}
+          {mode === "new" && !explorerEnrollment && <p className="text-sm text-amber-300">Public Explorer enrollment is pending.</p>}
+          <button className={primary} disabled={busy || (mode === "new" && !explorerEnrollment)}>{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "finish" ? "Verify and sign in" : "Continue"}</button>
+        </form>
+        {mode === "login" ? <div className="flex justify-between border-t border-slate-600 pt-3"><button type="button" className={link} disabled={busy} onClick={() => show("new")}>Register</button><button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("forgot"); }}>Forgot</button></div>
+          : mode === "new" ? <><button type="button" className={link} disabled={busy} onClick={() => show("legacy")}>Migrating from the Legacy Terminal</button>{back}</>
+          : mode === "finish" ? <button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("qr"); }}>Back to QR code</button> : back}
+      </>}
+      {message && <p role="status" className="text-sm text-amber-300">{message}</p>}
+    </main>;
+  }
   return <main className="mx-auto max-w-3xl bg-[#071c2f] px-5 py-5 text-slate-100">
     {!embedded && <a href="https://fund.digdug.do/" className="text-sky-300">← Fund Network</a>}
     <header className="mt-5 rounded-xl border border-slate-700 bg-slate-900/60 p-5">
