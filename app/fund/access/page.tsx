@@ -57,6 +57,7 @@ export default function FundAccess() {
         username: data.explorer?.username ?? null,
         positions: data.positions.map((position: Position) => ({
           id: position.id, position_ref: position.position_ref, status: position.status, funded_usdt: position.funded_usdt,
+          deposit_tx_hash: position.deposit_tx_hash, sweep_tx_hash: position.sweep_tx_hash,
         })),
       });
     }
