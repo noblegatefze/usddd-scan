@@ -38,7 +38,7 @@ export default function FundAccess() {
   const [mode, setMode] = useState<"login" | "new" | "legacy" | "finish">("login");
   const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string; badge?: string; startingCredit?: number } | null>(null);
   const [homeWizard, setHomeWizard] = useState(false);
-  const [wizardScreen, setWizardScreen] = useState<"form" | "qr" | "complete" | "forgot">("form");
+  const [wizardScreen, setWizardScreen] = useState<"form" | "qr" | "complete" | "forgot" | "setup">("form");
   const [embedded, setEmbedded] = useState(false);
   const [sessionChannel, setSessionChannel] = useState<BroadcastChannel | null>(null);
   const [explorerEnrollment, setExplorerEnrollment] = useState(false);
@@ -162,6 +162,10 @@ export default function FundAccess() {
       setPending(null);
       setMessage("");
     }
+    function openSetup() {
+      setMessage("");
+      setWizardScreen("setup");
+    }
     const back = <button type="button" className={link} onClick={() => show("login")}>Back to sign in</button>;
     const code = <label className="grid gap-1.5">Authenticator PIN<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>;
     return <main id="home-account-wizard" className="mx-auto grid max-w-md gap-4 bg-[#071c2f] px-5 py-5 text-slate-100">
@@ -178,7 +182,24 @@ export default function FundAccess() {
         <button type="button" className={link} onClick={signOut} disabled={busy}>Sign out</button>
       </> : wizardScreen === "forgot" ? <>
         <h1 className="text-xl font-semibold">Recover access</h1>
-        <p>Your Authenticator key is required to sign in. Email <a className={link} href="mailto:usddd@digdug.do">usddd@digdug.do</a> to request manual recovery.</p>
+        <section className="grid gap-2 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
+          <h2 className="font-semibold">Legacy Terminal users</h2>
+          <p className="text-sm">You need your Terminal username and Terminal Pass to set up your Explorer account. Go back to the Legacy Terminal to try to remember them.</p>
+          <a className={link} href="https://www.digdug.do/legacy-terminal" target="_blank" rel="noreferrer">Go to Legacy Terminal</a>
+        </section>
+        <section className="grid gap-2 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
+          <h2 className="font-semibold">Lost Authenticator PIN</h2>
+          <p className="text-sm">Recover access using your Authenticator app key or email <a className={link} href="mailto:usddd@digdug.do">usddd@digdug.do</a> to request manual recovery. Recovery is not guaranteed.</p>
+        </section>
+        {back}
+      </> : wizardScreen === "setup" ? <>
+        <h1 className="text-xl font-semibold">Setup account</h1>
+        <p>Do you remember your Legacy Terminal username and Terminal Pass?</p>
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" className={primary} onClick={() => show("legacy")}>Yes</button>
+          <button type="button" className="rounded-md border border-cyan-500 px-4 py-2.5 font-semibold text-cyan-200 hover:bg-cyan-950" onClick={() => show("new")}>Skip</button>
+        </div>
+        <p className="text-sm text-amber-200">By skipping, you may be forfeiting bonus USDDD rewards on account creation.</p>
         {back}
       </> : wizardScreen === "qr" && pending ? <>
         <h1 className="text-xl font-semibold">Set up Google Authenticator</h1>
@@ -195,16 +216,15 @@ export default function FundAccess() {
           <p className={step}>Step {mode === "finish" ? 3 : 1} of 3</p>
         </>}
         <form key={mode} onSubmit={submit} className="grid gap-4">
-          {mode !== "finish" && <label className="grid gap-1.5">{mode === "new" ? "Choose a username" : "Username"}<input className={field} name="username" autoComplete="username" maxLength={100} required /></label>}
+          {mode !== "finish" && <label className="grid gap-1.5">{mode === "new" ? "Choose a username" : "Username"}<input className={field} name="username" autoComplete="username" maxLength={100} pattern={"[^\\s]+"} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\s+/gu, ""); }} required /></label>}
           {mode === "legacy" && <label className="grid gap-1.5">Terminal Pass<input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
           {(mode === "login" || mode === "finish") && code}
           {mode === "new" && explorerEnrollment && <p className="text-sm text-slate-300">Player-operated bots, scripts, macros, and other gameplay automation are prohibited. <a className={link} href="https://play.digdug.do/#game-rules" target="_blank" rel="noreferrer">Read the game rules</a>.</p>}
           {mode === "new" && !explorerEnrollment && <p className="text-sm text-amber-300">Public Explorer enrollment is pending.</p>}
           <button className={primary} disabled={busy || (mode === "new" && !explorerEnrollment)}>{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "finish" ? "Verify and sign in" : "Continue"}</button>
         </form>
-        {mode === "login" ? <div className="flex justify-between border-t border-slate-600 pt-3"><button type="button" className={link} disabled={busy} onClick={() => show("new")}>Register</button><button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("forgot"); }}>Forgot</button></div>
-          : mode === "new" ? <><button type="button" className={link} disabled={busy} onClick={() => show("legacy")}>Migrating from the Legacy Terminal</button>{back}</>
-          : mode === "finish" ? <button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("qr"); }}>Back to QR code</button> : back}
+        {mode === "login" ? <div className="flex justify-between border-t border-slate-600 pt-3"><button type="button" className={link} disabled={busy} onClick={openSetup}>Setup account</button><button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("forgot"); }}>Forgot</button></div>
+          : mode === "finish" ? <button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("qr"); }}>Back to QR code</button> : <button type="button" className={link} disabled={busy} onClick={openSetup}>Back to setup</button>}
       </>}
       {message && <p role="status" className="text-sm text-amber-300">{message}</p>}
     </main>;
