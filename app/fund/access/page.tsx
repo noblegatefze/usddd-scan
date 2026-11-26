@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import ExplorerProfile from "./explorer-profile";
 
 type Position = {
   id: string;
@@ -151,6 +152,10 @@ export default function FundAccess() {
     } finally { setBusy(false); }
   }
 
+  const updateAvatar = useCallback((avatar: string) => {
+    if (explorer?.username) notifyParent({ type: "flatverse-avatar", username: explorer.username, badge: explorer.badge, avatar });
+  }, [explorer?.username, explorer?.badge]);
+
   const field = "block w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2";
   if (homeWizard) {
     const primary = "w-full rounded-md bg-amber-400 px-4 py-2.5 font-semibold text-slate-950 hover:bg-amber-300 disabled:opacity-50";
@@ -175,12 +180,15 @@ export default function FundAccess() {
         <p>{pending?.startingCredit ?? 10} USDDD Practice World starting credit</p>
         <a className={primary + " block text-center"} href="https://play.digdug.do/" target="_blank" rel="noreferrer">Play Flatverse</a>
         <button type="button" className={link} onClick={() => show("login")}>Back to account</button>
-      </> : positions ? <>
-        <h1 className="text-xl font-semibold">{explorer?.username ?? "Explorer account"}</h1>
-        {explorer?.badge && <p>{explorer.badge}</p>}
-        <a className={primary + " block text-center"} href="https://play.digdug.do/" target="_blank" rel="noreferrer">Play Flatverse</a>
-        <button type="button" className={link} onClick={signOut} disabled={busy}>Sign out</button>
-      </> : wizardScreen === "forgot" ? <>
+      </> : positions ? <ExplorerProfile
+        key={explorer?.username}
+        username={explorer?.username ?? "Explorer"}
+        badge={explorer?.badge ?? "Explorer"}
+        positions={positions}
+        busy={busy}
+        signOut={signOut}
+        onAvatar={updateAvatar}
+      /> : wizardScreen === "forgot" ? <>
         <h1 className="text-xl font-semibold">Recover access</h1>
         <section className="grid gap-2 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
           <h2 className="font-semibold">Legacy Terminal users</h2>
