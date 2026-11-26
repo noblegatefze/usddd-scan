@@ -85,6 +85,17 @@ export default function FundAccess() {
     return () => { controller.abort(); channel?.close(); window.removeEventListener("message", receive); };
   }, []);
 
+  useEffect(() => {
+    if (!homeWizard) return;
+    const panel = document.getElementById("home-account-wizard");
+    if (!panel) return;
+    const reportHeight = () => notifyParent({ type: "flatverse-account-height", height: panel.getBoundingClientRect().height });
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(panel);
+    reportHeight();
+    return () => observer.disconnect();
+  }, [homeWizard]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -153,7 +164,7 @@ export default function FundAccess() {
     }
     const back = <button type="button" className={link} onClick={() => show("login")}>Back to sign in</button>;
     const code = <label className="grid gap-1.5">Authenticator PIN<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>;
-    return <main className="mx-auto grid max-w-md gap-4 bg-[#071c2f] px-5 py-5 text-slate-100">
+    return <main id="home-account-wizard" className="mx-auto grid max-w-md gap-4 bg-[#071c2f] px-5 py-5 text-slate-100">
       {wizardScreen === "complete" ? <>
         <h1 className="text-xl font-semibold">{pending?.badge ? "Migration complete" : "Account ready"}</h1>
         {pending?.badge && <p>{pending.badge}</p>}
