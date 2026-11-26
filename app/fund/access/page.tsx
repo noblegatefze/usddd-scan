@@ -36,7 +36,7 @@ function notifyParent(message: object) {
 
 export default function FundAccess() {
   const [mode, setMode] = useState<"login" | "new" | "legacy" | "finish">("login");
-  const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string } | null>(null);
+  const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string; badge?: string; startingCredit?: number } | null>(null);
   const [embedded, setEmbedded] = useState(false);
   const [sessionChannel, setSessionChannel] = useState<BroadcastChannel | null>(null);
   const [explorerEnrollment, setExplorerEnrollment] = useState(false);
@@ -156,11 +156,12 @@ export default function FundAccess() {
       {mode === "new" && !explorerEnrollment && <p role="status" className="mt-2 text-amber-300">Public Explorer enrollment is pending.</p>}
       {mode === "login" && <p className="mt-2 text-sm text-slate-300">Enter your username and the current six-digit code from Google Authenticator.</p>}
       {pending && mode === "finish" && <div className="mt-3 space-y-3">
+        {pending.badge && <p className="text-sky-300">{pending.badge} · {pending.startingCredit} USDDD starting credit in the Practice World</p>}
         <p>Scan this QR code in Google Authenticator, then enter the six-digit code below.</p>
         <p className="text-amber-300">Keep the Authenticator entry for your username. You’ll use its current six-digit code to sign in on any device.</p>
         {/* The data URL contains the enrollment secret, so render it locally. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={pending.qrCode} alt="Scan to enroll in Fund Network" width={240} height={240} className="max-w-full rounded-md" />
+        <img src={pending.qrCode} alt="Scan to enroll in Flatverse" width={240} height={240} className="max-w-full rounded-md" />
         <details><summary>Enter a setup key manually</summary><code className="block break-all py-2">{pending.setupKey}</code></details>
       </div>}
       <form key={mode} onSubmit={submit} className="my-4 grid gap-3">
