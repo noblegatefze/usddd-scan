@@ -1396,7 +1396,11 @@ export default function FundNetworkPage() {
           <strong className="fund-eyebrow">USDDD Fund Network</strong>
           <h1>Back the <span>Exploration</span></h1>
           <p>Access existing positions or open a dedicated USDT funding position.</p>
-          <a className="fund-view" href="/fund/access">Fund Authenticator pilot</a>
+          <a className="fund-view" href="#explorer-accounts">Explorer accounts</a>
+          <details id="explorer-accounts" className="mt-4 w-full max-w-3xl rounded-lg border border-cyan-900 bg-[#071c2f] p-3">
+            <summary className="cursor-pointer text-sm text-sky-200">Open enrollment and sign-in</summary>
+            <iframe title="Explorer account forms" src="/fund/access" loading="lazy" className="mt-3 block h-[660px] w-full rounded-md border border-cyan-900" />
+          </details>
         </section>
         <div className="fund-grid">
           <section className="fund-card"><h2>{bound ? "Your positions" : "Existing positions"}</h2><p>{bound ? "Review positions and receipts linked to your Terminal account." : "Link a Legacy Terminal session to access positions from another browser."}</p><a className="fund-view" href="#positions">View positions</a></section>
