@@ -17,8 +17,21 @@ async function post(path: string, body: object) {
     cache: "no-store", body: JSON.stringify(body),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Fund access is temporarily unavailable.");
+  if (!response.ok) throw Object.assign(new Error(data.error || "Fund access is temporarily unavailable."), { status: response.status });
   return data;
+}
+
+const accountSites = new Set(["https://www.digdug.do", "https://digdug.do", "https://usddd.digdug.do", "https://play.digdug.do"]);
+
+function parentSite() {
+  if (window.parent === window || !document.referrer) return null;
+  const origin = new URL(document.referrer).origin;
+  return accountSites.has(origin) ? origin : null;
+}
+
+function notifyParent(message: object) {
+  const origin = parentSite();
+  if (origin) window.parent.postMessage(message, origin);
 }
 
 export default function FundAccess() {
@@ -35,16 +48,34 @@ export default function FundAccess() {
     const data = await post("positions", { authenticator: true });
     setPositions(data.positions);
     setExplorer(data.explorer ?? null);
+    if (typeof data.explorer?.username === "string") notifyParent({ type: "flatverse-profile", username: data.explorer.username });
   }
 
   useEffect(() => {
     setEmbedded(window.parent !== window);
     const controller = new AbortController();
-    void loadPositions().catch(() => {});
+    const refresh = () => void loadPositions().catch((error) => {
+      if (error?.status === 401) {
+        setPositions(null);
+        setExplorer(null);
+        notifyParent({ type: "flatverse-profile", username: null });
+      }
+    });
+    const receive = (event: MessageEvent) => {
+      if (event.source !== window.parent || event.origin !== parentSite()) return;
+      if (event.data?.type === "flatverse-refresh-profile") refresh();
+      if (event.origin === "https://play.digdug.do" && event.data?.type === "flatverse-request-play-ticket") {
+        void post("authenticator", { action: "play_ticket" }).then(({ ticket }) => {
+          notifyParent({ type: "flatverse-play-ticket", ticket });
+        }).catch(() => notifyParent({ type: "flatverse-play-unavailable" }));
+      }
+    };
+    window.addEventListener("message", receive);
+    refresh();
     void fetch("/api/fund/authenticator", { cache: "no-store", signal: controller.signal })
       .then(async response => { if (response.ok) setExplorerEnrollment((await response.json()).explorerEnrollment === true); })
       .catch(() => {});
-    return () => controller.abort();
+    return () => { controller.abort(); window.removeEventListener("message", receive); };
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -85,6 +116,7 @@ export default function FundAccess() {
       await post("authenticator", { action: "signout" });
       setPositions(null);
       setExplorer(null);
+      notifyParent({ type: "flatverse-profile", username: null });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Sign-out failed.");
     } finally { setBusy(false); }
