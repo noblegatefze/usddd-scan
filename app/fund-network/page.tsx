@@ -14,7 +14,6 @@ const links = [["Home","https://www.digdug.do/"],["Observatory",accountOrigin+"/
 export default function FundNetwork() {
   const [account, setAccount] = useState<Account | null>(null);
   const [page, setPage] = useState(0);
-  const [showActions, setShowActions] = useState(false);
   useEffect(() => {
     function receive(event: MessageEvent) {
       const frame = document.querySelector<HTMLIFrameElement>(".dd-account-frame");
@@ -56,8 +55,16 @@ export default function FundNetwork() {
         <h1 className="text-4xl font-black tracking-tight sm:text-6xl">Back the <span className="text-amber-300">Exploration</span></h1>
         <p className="mt-3 text-sm text-slate-200">View Fund positions linked to your Explorer account.</p>
       </section>
-      <section id="positions" className="rounded-lg border border-cyan-800 bg-[#061c2d] p-5" aria-labelledby="positions-heading">
-        <h2 id="positions-heading" className="text-base font-bold">Your positions</h2>
+      <details className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Manage deposits and withdrawals</summary>
+        <div className="mt-3 grid gap-2 text-xs text-slate-300">
+          <p>Open Fund tools to issue a deposit address, confirm a deposit, or request a withdrawal.</p>
+          <a className="justify-self-start rounded border border-cyan-800 px-2.5 py-1.5 font-medium text-cyan-100" href="https://usddd.digdug.do/fund?legacy=1#positions" target="_blank" rel="noreferrer">Open Fund tools ↗</a>
+        </div>
+      </details>
+      <details id="positions" open className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Your positions</summary>
+        <div className="mt-3">
         {account?.username ? <>
           <p className="mt-1 text-xs text-slate-300">Signed in as {account.username}</p>
           <dl className="my-4 grid grid-cols-2 gap-3 sm:max-w-md">
@@ -83,15 +90,9 @@ export default function FundNetwork() {
             </nav>
           </> : <p className="text-xs text-slate-300">No positions are linked to this account.</p>}
         </> : <p className="mt-2 text-sm text-slate-300">Sign in using the Explorer account button at the top right to see your positions.</p>}
-      </section>
-      <section className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
-        <button type="button" className="text-sm font-semibold text-cyan-100 underline" aria-expanded={showActions} aria-controls="fund-actions" onClick={() => setShowActions(!showActions)}>Manage deposits and withdrawals</button>
-        {showActions && <div id="fund-actions" className="mt-3 grid gap-2">
-          <p className="text-xs text-slate-300">Deposit and withdrawal requests use the existing Fund authorization. Your linked positions and receipts are shown above.</p>
-          <iframe title="Fund deposit and withdrawal tools" className="h-[680px] w-full rounded-md border border-slate-700" src="https://usddd.digdug.do/fund?legacy=1&embedded=fund#positions" />
-          <a className="justify-self-start text-xs text-cyan-200 underline" href="https://usddd.digdug.do/fund?legacy=1#positions" target="_blank" rel="noreferrer">Open Fund tools in a new tab</a>
-        </div>}
-      </section>
+        </div>
+      </details>
+
     </div>
   </main>;
 }
