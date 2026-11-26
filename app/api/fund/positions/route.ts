@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
         status, headers: { "Cache-Control": "no-store" },
       });
       const pilotOwner = fundAuthenticatorPilotOwner();
-      if (!pilotOwner) return response({ error: "Fund Authenticator pilot is unavailable." }, 503);
+      const explorerEnabled = process.env.FLATVERSE_EXPLORER_ENROLLMENT === "true";
+      if (!pilotOwner && !explorerEnabled) return response({ error: "Fund Authenticator pilot is unavailable." }, 503);
       const token = req.cookies.get("__Host-ussd-fund-session")?.value;
       if (!token || !/^[a-f0-9]{64}$/.test(token)) return response({ error: "Sign in to view your positions." }, 401);
       const { data: session, error: sessionError } = await sb
@@ -65,7 +66,15 @@ export async function POST(req: NextRequest) {
         .eq("token_hash", createHash("sha256").update(token).digest("hex"))
         .gt("expires_at", new Date().toISOString()).maybeSingle();
       if (sessionError) return response({ error: "Fund sign-in is unavailable." }, 503);
-      if (!session || session.terminal_user_id !== pilotOwner) return response({ error: "Your session has expired. Sign in again." }, 401);
+      if (!session) return response({ error: "Your session has expired. Sign in again." }, 401);
+      if (session.terminal_user_id !== pilotOwner) {
+        if (!explorerEnabled) return response({ error: "Your session has expired. Sign in again." }, 401);
+        const { data: explorer, error } = await sb.from("flatverse_usernames").select("display_name")
+          .eq("account_id", session.terminal_user_id).eq("source", "explorer").maybeSingle();
+        if (error) return response({ error: "Your account could not be loaded." }, 503);
+        if (!explorer) return response({ error: "Your session has expired. Sign in again." }, 401);
+        return response({ ok: true, positions: [], explorer: { username: explorer.display_name, badge: "Explorer" } });
+      }
       const { data: positions, error } = await sb.from("fund_positions")
         .select(SELECT_COLS).eq("terminal_user_id", session.terminal_user_id);
       if (error) return response({ error: "Your positions could not be loaded." }, 503);

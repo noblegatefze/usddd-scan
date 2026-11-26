@@ -1,5 +1,5 @@
 import { fundAuthenticatorDatabaseAllowed, fundAuthenticatorPilotOwner } from "../../../fund/authenticator-config";
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import QRCode from "qrcode";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
@@ -72,10 +72,25 @@ function withSession(value: string) {
   return response;
 }
 
+export function GET() {
+  return json({ explorerEnrollment: process.env.FLATVERSE_EXPLORER_ENROLLMENT === "true" &&
+    fundAuthenticatorDatabaseAllowed() && Boolean(process.env.FUND_AUTHENTICATOR_ORIGIN) &&
+    /^[a-f0-9]{64}$/i.test(process.env.FUND_AUTHENTICATOR_KEY ?? "") });
+}
+
+async function enrollmentQr(secret: Buffer, username: string) {
+  const manualKey = setupKey(secret);
+  const issuer = "DIGDUG.DO Fund Network";
+  const label = encodeURIComponent(issuer + ":" + username);
+  const uri = "otpauth://totp/" + label + "?" + new URLSearchParams({ secret: manualKey, issuer });
+  return { setupKey: manualKey, qrCode: await QRCode.toDataURL(uri, { width: 240 }) };
+}
+
 export async function POST(req: NextRequest) {
   if (!fundAuthenticatorDatabaseAllowed()) return json({ error: "Fund Authenticator Preview is not configured." }, 503);
   const pilotOwner = fundAuthenticatorPilotOwner();
-  if (!pilotOwner) return json({ error: "Fund Authenticator pilot is unavailable." }, 503);
+  const explorerEnabled = process.env.FLATVERSE_EXPLORER_ENROLLMENT === "true";
+  if (!pilotOwner && !explorerEnabled) return json({ error: "Fund Authenticator pilot is unavailable." }, 503);
   const secretKey = process.env.FUND_AUTHENTICATOR_KEY ?? "";
   const origin = process.env.FUND_AUTHENTICATOR_ORIGIN;
   if (!/^[a-f0-9]{64}$/i.test(secretKey) || !origin) {
@@ -117,6 +132,21 @@ export async function POST(req: NextRequest) {
         .select("terminal_user_id,encrypted_secret").eq("challenge_hash", challengeHash)
         .gt("expires_at", new Date().toISOString()).maybeSingle();
       if (error) throw error;
+      if (!pending && explorerEnabled) {
+        const { data: player, error: playerError } = await db.from("flatverse_explorer_enrollments")
+          .select("account_id,encrypted_secret").eq("challenge_hash", challengeHash)
+          .gt("expires_at", new Date().toISOString()).maybeSingle();
+        if (playerError) throw playerError;
+        if (!player) return deny();
+        const step = acceptedStep(open(player.encrypted_secret, key, player.account_id), body.code);
+        if (step === null) return deny();
+        const session = token();
+        const { data, error: verifyError } = await db.rpc("flatverse_finish_explorer_enrollment", {
+          p_challenge_hash: challengeHash, p_step: step, p_token_hash: hash(session),
+        });
+        if (verifyError) throw verifyError;
+        return data ? withSession(session) : json({ error: "That username is no longer available. Go back and try again." }, 409);
+      }
       if (!pending || pending.terminal_user_id !== pilotOwner) return deny();
       const step = acceptedStep(open(pending.encrypted_secret, key, pending.terminal_user_id), body.code);
       if (step === null) return deny();
@@ -132,45 +162,68 @@ export async function POST(req: NextRequest) {
     const username = typeof body.username === "string" ? body.username.trim() : "";
     if (!username || username.length > 100) return deny();
     const enrolling = body.action === "start";
-    if (enrolling && (typeof body.pass !== "string" || !body.pass || body.pass.length > 256)) return deny();
     if (!enrolling && (typeof body.code !== "string" || !/^[0-9]{6}$/.test(body.code))) return deny();
     if (!await allow("account:" + username.toLowerCase(), 8)) return limited();
+
+    if (enrolling && explorerEnabled && body.pass === "") {
+      if (!/^[A-Za-z0-9_]{3,24}$/.test(username)) return json({ error: "Use 3–24 letters, numbers, or underscores." }, 400);
+      const { data: reserved, error: nameError } = await db.from("flatverse_usernames")
+        .select("username_key").eq("username_key", username.toLowerCase()).maybeSingle();
+      if (nameError) throw nameError;
+      if (reserved) return json({ error: "That username is reserved. Choose another name or use its Terminal Pass." }, 409);
+      const id = randomUUID();
+      const secret = randomBytes(20);
+      const challenge = token();
+      const setup = await enrollmentQr(secret, username);
+      const { error } = await db.from("flatverse_explorer_enrollments").insert({
+        challenge_hash: hash(challenge), account_id: id, username,
+        encrypted_secret: seal(secret, key, id),
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      });
+      if (error) throw error;
+      return json({ challenge, ...setup });
+    }
+
+    if (enrolling && (typeof body.pass !== "string" || !body.pass || body.pass.length > 256)) return deny();
     const users = db.from("dd_terminal_users");
     const { data: user, error: userError } = enrolling
       ? await users.select("id,pass_hash,twofa_enabled").eq("username", username).maybeSingle()
       : await users.select("id").eq("username", username).maybeSingle();
     if (userError) throw userError;
-    if (!user || user.id !== pilotOwner) return deny();
+    let accountId = user && user.id === pilotOwner ? user.id : null;
+    if (!accountId && !enrolling && explorerEnabled) {
+      const { data: player, error } = await db.from("flatverse_usernames").select("account_id")
+        .eq("source", "explorer").eq("username_key", username.toLowerCase()).maybeSingle();
+      if (error) throw error;
+      accountId = player?.account_id ?? null;
+    }
+    if (!accountId) return deny();
     const { data: credential, error: credentialError } = await db.from("fund_authenticator_credentials")
-      .select("encrypted_secret").eq("terminal_user_id", user.id).maybeSingle();
+      .select("encrypted_secret").eq("terminal_user_id", accountId).maybeSingle();
     if (credentialError) throw credentialError;
     if (enrolling) {
-      if (!("pass_hash" in user) || !isToken(user.pass_hash) ||
+      if (!user || !("pass_hash" in user) || !isToken(user.pass_hash) ||
           !timingSafeEqual(Buffer.from(user.pass_hash, "hex"), Buffer.from(hash(body.pass), "hex"))) return deny();
       if (credential) return json({ error: "Fund Authenticator is already set up. Sign in or contact support." }, 409);
       if (!("twofa_enabled" in user) || user.twofa_enabled) return json({ error: "Contact support to migrate your existing Terminal two-factor authentication." }, 409);
       const secret = randomBytes(20);
-      const manualKey = setupKey(secret);
-      const issuer = "DIGDUG.DO Fund Network";
-      const label = encodeURIComponent(issuer + ":" + username);
-      const uri = "otpauth://totp/" + label + "?" + new URLSearchParams({ secret: manualKey, issuer });
-      const qrCode = await QRCode.toDataURL(uri, { width: 240 });
       const challenge = token();
+      const setup = await enrollmentQr(secret, username);
       const { error } = await db.from("fund_authenticator_enrollments").insert({
-        challenge_hash: hash(challenge), terminal_user_id: user.id,
-        encrypted_secret: seal(secret, key, user.id),
+        challenge_hash: hash(challenge), terminal_user_id: accountId,
+        encrypted_secret: seal(secret, key, accountId),
         expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
       if (error) throw error;
-      return json({ challenge, setupKey: manualKey, qrCode });
+      return json({ challenge, ...setup });
     }
 
     if (!credential) return deny();
-    const step = acceptedStep(open(credential.encrypted_secret, key, user.id), body.code);
+    const step = acceptedStep(open(credential.encrypted_secret, key, accountId), body.code);
     if (step === null) return deny();
     const session = token();
     const { data, error } = await db.rpc("fund_consume_authenticator_code", {
-      p_user: user.id, p_expected_secret: credential.encrypted_secret, p_step: step, p_token_hash: hash(session),
+      p_user: accountId, p_expected_secret: credential.encrypted_secret, p_step: step, p_token_hash: hash(session),
     });
     if (error) throw error;
     return data === true ? withSession(session) : deny();
