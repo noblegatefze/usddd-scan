@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import Script from "next/script";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getPublicFlags } from "../lib/flags";
 import { FundMaintenance } from "../_maintenance/FundMaintenance";
@@ -982,6 +983,7 @@ export default function FundNetworkPage() {
           <a href="https://www.digdug.do/surface-dispatch">Surface Dispatch</a>
           <a className="site-cta" href="https://play.digdug.do/">Play Flatverse</a>
         </nav>
+        <div data-explorer-account="" />
         <div className="fund-meta">
           <span>Phase: Zero / Pre-Genesis</span>
           <span>Version: {meta?.version ?? "--"}</span>
@@ -995,6 +997,8 @@ export default function FundNetworkPage() {
         </div>
       </header>
 
+      <Script src="/explorer-account.js" strategy="afterInteractive" />
+      <style>{`@media(max-width:760px){.fv-fund .site-nav{order:2}.fv-fund .fund-meta{order:3}}`}</style>
       {/* ✅ Withdraw receipt modal */}
       {receiptModal.open ? (
         <div className="fixed inset-0 z-[125] flex items-center justify-center">
@@ -1396,11 +1400,7 @@ export default function FundNetworkPage() {
           <strong className="fund-eyebrow">USDDD Fund Network</strong>
           <h1>Back the <span>Exploration</span></h1>
           <p>Access existing positions or open a dedicated USDT funding position.</p>
-          <a className="fund-view" href="#explorer-accounts">Explorer accounts</a>
-          <details id="explorer-accounts" className="mt-4 w-full max-w-3xl rounded-lg border border-cyan-900 bg-[#071c2f] p-3">
-            <summary className="cursor-pointer text-sm text-sky-200">Open enrollment and sign-in</summary>
-            <iframe title="Explorer account forms" src="/fund/access" loading="lazy" className="mt-3 block h-[660px] w-full rounded-md border border-cyan-900" />
-          </details>
+          <button type="button" className="fund-view" data-open-explorer-account="">Explorer accounts</button>
         </section>
         <div className="fund-grid">
           <section className="fund-card"><h2>{bound ? "Your positions" : "Existing positions"}</h2><p>{bound ? "Review positions and receipts linked to your Terminal account." : "Link a Legacy Terminal session to access positions from another browser."}</p><a className="fund-view" href="#positions">View positions</a></section>
