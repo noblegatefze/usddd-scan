@@ -16,6 +16,9 @@
     .dd-account-avatar:focus-visible,.dd-account-close:focus-visible{outline:2px solid #ffdb4d;outline-offset:3px}
     .dd-account-dialog{position:fixed;inset:0;margin:auto;width:min(660px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:1px solid #4bbbce;border-radius:12px;background:#071c2f;color:#effbff}
     .dd-account-dialog::backdrop{background:#020c19bb}
+    .dd-account-dialog[data-home-wizard]{inset:auto 12px auto auto;top:var(--account-top,16px);right:var(--account-right,12px);width:min(390px,calc(100vw - 24px));margin:0}
+    .dd-account-dialog[data-home-wizard] .dd-account-frame{height:min(var(--account-height,340px),calc(100dvh - var(--account-top,16px) - 63px))}
+    .dd-account-dialog[data-home-wizard]::backdrop{background:#020c1966}
     .dd-account-heading{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #265374;font:700 16px system-ui}
     .dd-account-close{background:none;border:0;color:#effbff;cursor:pointer;font:24px system-ui}
     .dd-account-frame{display:block;width:100%;height:min(680px,calc(100dvh - 83px));border:0;background:#071c2f}
@@ -44,7 +47,14 @@
   frame.className = "dd-account-frame";
   frame.title = "Explorer account forms";
   frame.referrerPolicy = "strict-origin";
-  frame.src = accountOrigin + "/fund/access";
+  function syncView() {
+    const home = ["https://digdug.do", "https://www.digdug.do"].includes(location.origin) &&
+      ["/", "/flatverse", "/flatverse/"].includes(location.pathname);
+    const src = accountOrigin + "/fund/access" + (home ? "?view=home" : "");
+    dialog.toggleAttribute("data-home-wizard", home);
+    if (frame.src !== src) frame.src = src;
+  }
+  syncView();
   dialog.append(heading, frame);
   mount.append(button);
   document.body.append(dialog);
@@ -59,6 +69,12 @@
   let playStatus = "unknown";
   window.addEventListener("message", async event => {
     if (event.origin !== accountOrigin || event.source !== frame.contentWindow) return;
+    if (event.data?.type === "flatverse-account-height" && dialog.hasAttribute("data-home-wizard")) {
+      const height = event.data.height;
+      if (typeof height === "number" && Number.isFinite(height)) {
+        dialog.style.setProperty("--account-height", Math.min(700, Math.max(160, Math.ceil(height))) + "px");
+      }
+    }
     if (event.data?.type === "flatverse-profile") {
       username = typeof event.data.username === "string" ? event.data.username : null;
       button.setAttribute("aria-label", username ? "Explorer account: " + username : "Explorer account");
@@ -90,12 +106,22 @@
     }
     if (event.data?.type === "flatverse-play-unavailable") linking = false;
   });
+  function positionHomeWizard() {
+    if (!dialog.hasAttribute("data-home-wizard")) return;
+    const rect = button.getBoundingClientRect();
+    const top = rect.bottom > 0 && rect.bottom < innerHeight / 2 ? rect.bottom + 8 : 16;
+    dialog.style.setProperty("--account-top", top + "px");
+    dialog.style.setProperty("--account-right", Math.max(12, innerWidth - rect.right) + "px");
+  }
   const open = () => {
+    syncView();
+    positionHomeWizard();
     if (!dialog.open) dialog.showModal();
     send("flatverse-refresh-profile");
   };
   button.addEventListener("click", open);
   close.addEventListener("click", () => dialog.close());
+  window.addEventListener("resize", positionHomeWizard);
   window.addEventListener("focus", () => send("flatverse-refresh-profile"));
   document.addEventListener("click", event => {
     if (event.target instanceof Element && event.target.closest("[data-open-explorer-account]")) open();
@@ -103,7 +129,10 @@
   // Next.js can replace the header without reloading the shared script.
   const headerObserver = new MutationObserver(() => {
     const target = document.querySelector("[data-explorer-account]");
-    if (target && button.parentElement !== target) target.append(button);
+    if (target && button.parentElement !== target) {
+      syncView();
+      target.append(button);
+    }
     if (!target && dialog.open) dialog.close();
   });
   headerObserver.observe(document.body, { childList: true, subtree: true });
