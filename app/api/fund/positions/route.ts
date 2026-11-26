@@ -67,18 +67,22 @@ export async function POST(req: NextRequest) {
         .gt("expires_at", new Date().toISOString()).maybeSingle();
       if (sessionError) return response({ error: "Fund sign-in is unavailable." }, 503);
       if (!session) return response({ error: "Your session has expired. Sign in again." }, 401);
-      if (session.terminal_user_id !== pilotOwner) {
-        if (!explorerEnabled) return response({ error: "Your session has expired. Sign in again." }, 401);
+      const owner = session.terminal_user_id;
+      if (owner !== pilotOwner && !explorerEnabled) return response({ error: "Your session has expired. Sign in again." }, 401);
+      const { data: legacy, error: legacyError } = await sb.from("dd_terminal_users").select("username").eq("id", owner).maybeSingle();
+      if (legacyError) return response({ error: "Your account could not be loaded." }, 503);
+      if (!legacy) {
         const { data: explorer, error } = await sb.from("flatverse_usernames").select("display_name")
-          .eq("account_id", session.terminal_user_id).eq("source", "explorer").maybeSingle();
+          .eq("account_id", owner).eq("source", "explorer").maybeSingle();
         if (error) return response({ error: "Your account could not be loaded." }, 503);
         if (!explorer) return response({ error: "Your session has expired. Sign in again." }, 401);
         return response({ ok: true, positions: [], explorer: { username: explorer.display_name, badge: "Explorer" } });
       }
       const { data: positions, error } = await sb.from("fund_positions")
-        .select(SELECT_COLS).eq("terminal_user_id", session.terminal_user_id);
+        .select(SELECT_COLS).eq("terminal_user_id", owner);
       if (error) return response({ error: "Your positions could not be loaded." }, 503);
-      return response({ ok: true, positions: positions ?? [] });
+      const badge = positions.some((position) => Number(position.funded_usdt) > 0) ? "Legacy Backer Badge" : "Legacy Badge";
+      return response({ ok: true, positions, explorer: { username: legacy.username, badge } });
     }
 
     // Mode A: session_id -> resolve terminal user -> return all bound positions
