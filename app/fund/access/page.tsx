@@ -76,17 +76,20 @@ export default function FundAccess() {
   }
 
   const field = "block w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2";
-  return <main className="mx-auto max-w-2xl px-5 py-10">
+  return <main className="mx-auto max-w-3xl px-5 py-10 text-slate-100">
     <a href="/fund" className="text-sky-300">← Fund Network</a>
-    <h1 className="mt-4 text-3xl font-semibold">Fund Network access</h1>
+    <header className="mt-5 rounded-xl border border-slate-700 bg-slate-900/60 p-5">
+      <h1 className="text-3xl font-semibold">Fund Network access</h1>
+      <p className="mt-2 text-sm text-slate-300">Read-only Authenticator pilot for invited accounts. Use Fund Network for deposit and withdrawal requests.</p>
+    </header>
     {positions ? <>
       <h2 className="mt-6 text-xl">Your positions</h2>
       {positions.length === 0 && <p className="mt-3">No positions are linked to this account.</p>}
-      <ul className="my-4 space-y-3">{positions.map(position => <li key={position.id} className="rounded-md border border-slate-700 p-4">
+      <ul className="my-4 space-y-3">{positions.map(position => <li key={position.id} className="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
         <strong>{position.position_ref}</strong>
-        <p>{position.status}{position.funded_usdt != null && <> · {position.funded_usdt} USDT</>}</p>
-        {position.deposit_tx_hash && <p className="break-all">Deposit receipt {position.deposit_tx_hash}</p>}
-        {position.sweep_tx_hash && <p className="break-all">Sweep receipt {position.sweep_tx_hash}</p>}
+        <p className="mt-1 text-slate-300"><span className="capitalize">{position.status === "swept_locked" ? "Swept and locked" : position.status.replaceAll("_", " ")}</span>{position.funded_usdt != null && <> · {position.funded_usdt} USDT</>}</p>
+        {position.deposit_tx_hash && <p className="mt-2 break-all text-sm"><span className="block text-slate-400">Deposit receipt</span><code>{position.deposit_tx_hash}</code></p>}
+        {position.sweep_tx_hash && <p className="mt-2 break-all text-sm"><span className="block text-slate-400">Sweep receipt</span><code>{position.sweep_tx_hash}</code></p>}
       </li>)}</ul>
       <button type="button" disabled={busy} onClick={signOut} className="underline">Sign out</button>
     </> : <>
