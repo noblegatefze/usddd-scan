@@ -248,6 +248,11 @@ export async function POST(req: NextRequest) {
           !timingSafeEqual(Buffer.from(user.pass_hash, "hex"), Buffer.from(hash(body.pass), "hex"))) return deny();
       if (credential) return json({ error: "Fund Authenticator is already set up. Sign in or contact support." }, 409);
       if (!("twofa_enabled" in user) || user.twofa_enabled) return json({ error: "Contact support to migrate your existing Terminal two-factor authentication." }, 409);
+      const { data: position, error: positionError } = await db.from("fund_positions")
+        .select("id").eq("terminal_user_id", accountId).gt("funded_usdt", 0).limit(1).maybeSingle();
+      if (positionError) throw positionError;
+      const badge = position ? "Legacy Backer Badge" : "Legacy Badge";
+      const startingCredit = position ? 50 : 25;
       const secret = randomBytes(20);
       const challenge = token();
       const setup = await enrollmentQr(secret, username);
@@ -257,7 +262,7 @@ export async function POST(req: NextRequest) {
         expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
       if (error) throw error;
-      return json({ challenge, ...setup });
+      return json({ challenge, ...setup, badge, startingCredit });
     }
 
     if (!credential) return deny();
