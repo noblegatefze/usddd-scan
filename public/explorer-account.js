@@ -1,7 +1,7 @@
 (() => {
   const accountOrigin = "https://usddd.digdug.do";
   const mount = document.querySelector("[data-explorer-account]");
-  if (!mount || mount.childElementCount) return;
+  if (!mount || document.querySelector(".dd-account-dialog")) return;
   const play = location.origin === "https://play.digdug.do";
   let linkedUser;
   let linking = false;
@@ -93,5 +93,14 @@
   button.addEventListener("click", open);
   close.addEventListener("click", () => dialog.close());
   window.addEventListener("focus", () => send("flatverse-refresh-profile"));
-  document.querySelectorAll("[data-open-explorer-account]").forEach(trigger => trigger.addEventListener("click", open));
+  document.addEventListener("click", event => {
+    if (event.target instanceof Element && event.target.closest("[data-open-explorer-account]")) open();
+  });
+  // Next.js can replace the header without reloading the shared script.
+  const headerObserver = new MutationObserver(() => {
+    const target = document.querySelector("[data-explorer-account]");
+    if (target && button.parentElement !== target) target.append(button);
+    if (!target && dialog.open) dialog.close();
+  });
+  headerObserver.observe(document.body, { childList: true, subtree: true });
 })();
