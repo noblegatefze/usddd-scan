@@ -52,13 +52,13 @@ export default function FundNetwork() {
       </header>
       <Script src="https://usddd.digdug.do/explorer-account.js" strategy="afterInteractive" />
       <section className="rounded-lg border border-cyan-700 bg-[#061c2d] bg-cover bg-center px-5 py-10 sm:p-12" style={{backgroundImage:"linear-gradient(90deg,#061524,#061524e8 48%,#06152455),url(https://www.digdug.do/flatverse-ice-wall.jpg)"}}>
-        <h1 className="text-4xl font-black tracking-tight sm:text-6xl">Back the <span className="text-amber-300">Exploration</span></h1>
+        <h1 className="text-4xl font-black tracking-tight sm:text-6xl">Fund <span className="text-amber-300">Network</span></h1>
         <p className="mt-3 text-sm text-slate-200">View Fund positions linked to your Explorer account.</p>
       </section>
       <details className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
         <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Withdrawals and deposit support</summary>
         <div className="mt-3 grid gap-2 text-xs text-slate-300">
-          <p>Open Fund tools to issue a deposit address, confirm a deposit, or request a withdrawal.</p>
+          <p>For help withdrawing an unlocked position, email <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Fund%20withdrawal">usddd@digdug.do</a> with your position reference.</p>
           <p>New Fund positions are closed. Do not send USDT to a previously issued address.</p>
           <p>Already sent USDT to a Fund deposit address? <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Legacy%20Fund%20deposit%20review">Request manual review</a> with your transaction hash, deposit address, and position reference if available.</p>
 
