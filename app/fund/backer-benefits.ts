@@ -1,4 +1,4 @@
-export type BackerBadge = "backer" | "legacy" | "explorer";
+export type BackerBadge = "legacy_backer" | "backer" | "legacy" | "explorer";
 export type BackerBonus = {
   kind: "legacy_backer" | "legacy_explorer" | "first_new_backing";
   practiceUsddd: 50 | 25 | 10;
@@ -16,7 +16,7 @@ export function getBackerBenefits({
   firstFundingConfirmedAfterTransition,
 }: BackerEligibility): { badge: BackerBadge; eligibleBonuses: BackerBonus[] } {
   if (legacyAccount && fundedBeforeTransition) {
-    return { badge: "backer", eligibleBonuses: [{ kind: "legacy_backer", practiceUsddd: 50 }] };
+    return { badge: "legacy_backer", eligibleBonuses: [{ kind: "legacy_backer", practiceUsddd: 50 }] };
   }
 
   const eligibleBonuses: BackerBonus[] = [];
