@@ -3,14 +3,18 @@
 import Script from "next/script";
 import { useEffect, useState } from "react";
 
-type Position = { id: string; position_ref: string; status: string; funded_usdt: number | string | null };
+type Position = { id: string; position_ref: string; status: string; funded_usdt: number | string | null; deposit_tx_hash?: string | null; sweep_tx_hash?: string | null };
 type Account = { username: string | null; positions: Position[] };
+const pageSize = 10;
+const pageButton = "rounded border border-cyan-800 px-2.5 py-1 text-xs text-cyan-100 disabled:opacity-40";
 const accountOrigin = "https://usddd.digdug.do";
 const units = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 const links = [["Home","https://www.digdug.do/"],["Observatory",accountOrigin+"/"],["Surface Dispatch","https://feed.digdug.do/"],["Play Flatverse","https://play.digdug.do/"]];
 
 export default function FundNetwork() {
   const [account, setAccount] = useState<Account | null>(null);
+  const [page, setPage] = useState(0);
+  const [showActions, setShowActions] = useState(false);
   useEffect(() => {
     function receive(event: MessageEvent) {
       const frame = document.querySelector<HTMLIFrameElement>(".dd-account-frame");
@@ -25,6 +29,16 @@ export default function FundNetwork() {
   }, []);
   const active = account?.positions.filter(position => position.status !== "withdrawn" && Number(position.funded_usdt) > 0) ?? [];
   const funded = active.reduce((sum, position) => sum + Number(position.funded_usdt), 0);
+  const positions = account?.positions ?? [];
+  const lastPage = Math.max(0, Math.ceil(positions.length / pageSize) - 1);
+  const currentPage = Math.min(page, lastPage);
+  const start = currentPage * pageSize;
+  const rows = positions.slice(start, start + pageSize);
+  function receipt(hash: string | null | undefined, label: string) {
+    return hash && /^0x[\da-f]{64}$/i.test(hash)
+      ? <a className="text-cyan-200 underline" href={"https://bscscan.com/tx/" + hash} target="_blank" rel="noreferrer">{label}</a>
+      : null;
+  }
 
   return <main className="min-h-screen bg-[#04111e] px-4 py-5 text-slate-100 sm:px-8">
     <div className="mx-auto grid max-w-[1420px] gap-4">
@@ -43,20 +57,41 @@ export default function FundNetwork() {
         <p className="mt-3 text-sm text-slate-200">View Fund positions linked to your Explorer account.</p>
       </section>
       <section id="positions" className="rounded-lg border border-cyan-800 bg-[#061c2d] p-5" aria-labelledby="positions-heading">
-        <h2 id="positions-heading" className="text-xl font-bold">Your positions</h2>
+        <h2 id="positions-heading" className="text-base font-bold">Your positions</h2>
         {account?.username ? <>
-          <p className="mt-1 text-sm text-slate-300">Signed in as {account.username}</p>
+          <p className="mt-1 text-xs text-slate-300">Signed in as {account.username}</p>
           <dl className="my-4 grid grid-cols-2 gap-3 sm:max-w-md">
-            <div className="rounded-md border border-slate-700 p-3"><dt className="text-xs text-slate-300">Active funded positions</dt><dd className="text-2xl font-semibold">{active.length}</dd></div>
-            <div className="rounded-md border border-slate-700 p-3"><dt className="text-xs text-slate-300">Active funded amount</dt><dd className="text-2xl font-semibold">{units.format(funded)} USDT</dd></div>
+            <div className="rounded-md border border-slate-700 p-3"><dt className="text-xs text-slate-300">Active funded positions</dt><dd className="text-base font-semibold">{active.length}</dd></div>
+            <div className="rounded-md border border-slate-700 p-3"><dt className="text-xs text-slate-300">Active funded amount</dt><dd className="text-base font-semibold">{units.format(funded)} USDT</dd></div>
           </dl>
-          {account.positions.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm">
-            <thead><tr className="text-cyan-200"><th scope="col" className="py-2 pr-4">Reference</th><th scope="col" className="py-2 pr-4">Status</th><th scope="col" className="py-2">Funded</th></tr></thead>
-            <tbody>{account.positions.map(position => <tr className="border-t border-slate-700" key={position.id}><td className="py-2 pr-4">{position.position_ref}</td><td className="py-2 pr-4 capitalize">{position.status.replaceAll("_", " ")}</td><td className="py-2">{units.format(Number(position.funded_usdt) || 0)} USDT</td></tr>)}</tbody>
-          </table></div> : <p className="text-sm text-slate-300">No positions are linked to this account.</p>}
+          {positions.length ? <>
+            <div className="overflow-x-auto"><table aria-label="Fund positions" className="w-full text-left text-xs">
+              <thead><tr className="text-cyan-200"><th scope="col" className="py-1.5 pr-4">Reference</th><th scope="col" className="py-1.5 pr-4">Status</th><th scope="col" className="py-1.5 pr-4">Funded</th><th scope="col" className="py-1.5">Receipts</th></tr></thead>
+              <tbody>{rows.map(position => <tr className="border-t border-slate-700" key={position.id}>
+                <td className="whitespace-nowrap py-1.5 pr-4">{position.position_ref}</td>
+                <td className="py-1.5 pr-4 capitalize">{position.status.replaceAll("_", " ")}</td>
+                <td className="whitespace-nowrap py-1.5 pr-4">{units.format(Number(position.funded_usdt) || 0)} USDT</td>
+                <td className="py-1.5"><div className="flex gap-2">{receipt(position.deposit_tx_hash, "Deposit")}{receipt(position.sweep_tx_hash, "Sweep")}</div></td>
+              </tr>)}</tbody>
+            </table></div>
+            <nav className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300" aria-label="Fund position pages">
+              <span aria-live="polite">{start + 1}–{start + rows.length} of {positions.length} positions</span>
+              <div className="flex items-center gap-2">
+                <button type="button" className={pageButton} disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</button>
+                <button type="button" className={pageButton} disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>Next</button>
+              </div>
+            </nav>
+          </> : <p className="text-xs text-slate-300">No positions are linked to this account.</p>}
         </> : <p className="mt-2 text-sm text-slate-300">Sign in using the Explorer account button at the top right to see your positions.</p>}
       </section>
-      <a className="justify-self-start text-xs text-cyan-200 underline" href="https://usddd.digdug.do/fund?legacy=1#positions">Legacy Fund actions and positions saved in this browser</a>
+      <section className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
+        <button type="button" className="text-sm font-semibold text-cyan-100 underline" aria-expanded={showActions} aria-controls="fund-actions" onClick={() => setShowActions(!showActions)}>Manage deposits and withdrawals</button>
+        {showActions && <div id="fund-actions" className="mt-3 grid gap-2">
+          <p className="text-xs text-slate-300">Deposit and withdrawal requests use the existing Fund authorization. Your linked positions and receipts are shown above.</p>
+          <iframe title="Fund deposit and withdrawal tools" className="h-[680px] w-full rounded-md border border-slate-700" src="https://usddd.digdug.do/fund?legacy=1&embedded=fund#positions" />
+          <a className="justify-self-start text-xs text-cyan-200 underline" href="https://usddd.digdug.do/fund?legacy=1#positions" target="_blank" rel="noreferrer">Open Fund tools in a new tab</a>
+        </div>}
+      </section>
     </div>
   </main>;
 }
