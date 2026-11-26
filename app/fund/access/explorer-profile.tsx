@@ -11,18 +11,18 @@ type Props = {
   username: string; badge: string; positions: Position[]; busy: boolean; signOut: () => void;
   onAvatar: (avatar: string) => void;
 };
-const button = "rounded-md border border-cyan-700 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-950 disabled:opacity-50";
+const button = "rounded-md border border-cyan-700 px-2.5 py-1.5 text-xs font-medium text-cyan-100 hover:bg-cyan-950 disabled:opacity-50";
 const card = "rounded-lg border border-slate-700 bg-slate-950/35 p-3";
-const field = "min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-3 py-2";
+const field = "min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-xs";
 
 function Avatar({ choice, badge, small = false }: { choice: string; badge?: string; small?: boolean }) {
   const background = colors[choice as keyof typeof colors];
   const custom = /^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(choice);
   const icon = badge === "Legacy Backer Badge" ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
-  return <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300/40 ${small ? "size-9" : "size-16"}`} style={{ backgroundColor: background ?? colors.blue }}>
+  return <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300/40 ${small ? "size-6" : "size-11"}`} style={{ backgroundColor: background ?? colors.blue }}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={custom ? choice : favicon} alt="" className={custom ? "size-full rounded-full object-cover" : "size-2/3 rounded-full opacity-60"} />
-    {badge && <span aria-label={badge} title={badge} className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full border border-slate-900 bg-amber-300 text-sm text-slate-950">{icon}</span>}
+    {badge && <span aria-label={badge} title={badge} className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full border border-slate-900 bg-amber-300 text-[10px] text-slate-950">{icon}</span>}
   </span>;
 }
 
@@ -62,6 +62,7 @@ export default function ExplorerProfile({ username, badge, positions, busy, sign
   const [locked, setLocked] = useState(false);
   const [message, setMessage] = useState("");
   const [choose, setChoose] = useState(false);
+  const [selectedColor, setSelectedColor] = useState("");
 
   useEffect(() => {
     let current = true;
@@ -85,6 +86,7 @@ export default function ExplorerProfile({ username, badge, positions, busy, sign
       const data = await requestProfile(await getChanges());
       setProfile(data);
       setName(data.displayName);
+      setSelectedColor("");
       setMessage("Profile updated.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save your profile.");
@@ -103,41 +105,46 @@ export default function ExplorerProfile({ username, badge, positions, busy, sign
     return sum + (allocated > 0 ? allocated : amount(position.funded_usdt)) + amount(position.usddd_accrued_display);
   }, 0);
   return <>
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-3">
       <Avatar choice={profile?.avatar ?? "blue"} badge={badge} />
       <div className="min-w-0">
-        <h1 className="break-words text-xl font-semibold">{profile?.displayName ?? username}</h1>
-        <p className="break-words text-sm text-slate-300">@{username} · {badge}</p>
+        <h1 className="break-words text-base font-semibold">{profile?.displayName ?? username}</h1>
+        <p className="break-words text-xs text-slate-300">@{username} · {badge}</p>
       </div>
     </div>
-    <button type="button" className={button} aria-expanded={choose} onClick={() => setChoose(!choose)}>Change profile picture</button>
+    <button type="button" className={button} aria-expanded={choose} onClick={() => { setSelectedColor(""); setChoose(!choose); }}>Change profile picture</button>
     {choose && <section aria-label="Profile picture choices" className={card + " grid gap-3"}>
       <div className="flex flex-wrap gap-2">
-        {Object.keys(colors).map(color => <button key={color} type="button" className="rounded-full ring-offset-2 ring-offset-slate-900 aria-pressed:ring-2 aria-pressed:ring-cyan-200" aria-label={color + " Flatverse logo"} aria-pressed={profile?.avatar === color} disabled={locked} onClick={() => void save(async () => ({ avatar: color }))}><Avatar choice={color} small /></button>)}
+        {Object.keys(colors).map(color => {
+          const selected = (selectedColor || profile?.avatar) === color;
+          return <button key={color} type="button" className="grid size-10 place-items-center rounded-md border border-slate-600 hover:bg-cyan-950 focus-visible:outline-2 focus-visible:outline-cyan-200 aria-pressed:border-cyan-300 aria-pressed:bg-cyan-950 aria-pressed:ring-1 aria-pressed:ring-cyan-300" aria-label={color + " Flatverse logo"} aria-pressed={selected} disabled={locked} onClick={() => { setMessage(""); setSelectedColor(color); }}><Avatar choice={color} small /></button>;
+        })}
       </div>
-      <label className="grid gap-1 text-sm text-cyan-200">Upload image<input type="file" accept="image/jpeg,image/png,image/webp" className="max-w-full text-sm" disabled={locked} onChange={event => {
+      <button type="button" className={button} disabled={locked || !selectedColor || selectedColor === profile?.avatar} onClick={() => void save(async () => ({ avatar: selectedColor }))}>{locked ? "Saving…" : "Save profile picture"}</button>
+      {message && <p role="status" className="text-xs text-cyan-200">{message}</p>}
+      <label className="grid gap-1 text-xs text-cyan-200">Upload image<input type="file" accept="image/jpeg,image/png,image/webp" className="max-w-full text-xs" disabled={locked} onChange={event => {
         const file = event.currentTarget.files?.[0];
         event.currentTarget.value = "";
         if (file) void save(async () => ({ avatar: await prepareAvatar(file) }));
       }} /></label>
     </section>}
     <form onSubmit={saveName} className="grid gap-1.5">
-      <label htmlFor="game-display-name" className="text-sm font-medium">Game display name</label>
+      <label htmlFor="game-display-name" className="text-xs font-medium">Game display name</label>
       <div className="flex gap-2">
         <input id="game-display-name" value={name} onChange={event => setName(event.target.value)} className={field} placeholder={username} minLength={2} maxLength={20} required />
         <button className={button} disabled={locked || !name.trim() || profile?.displayName === name}>Save</button>
       </div>
     </form>
     <section className={card + " grid gap-2"} aria-label="Estimated net value">
-      <h2 className="text-sm font-semibold text-cyan-100">Estimated net value</h2>
-      <p className="text-2xl font-semibold">{profile ? dollars.format(profile.usddd + profile.rewardsUsd + fundValue) : "—"}</p>
+      <h2 className="text-xs font-semibold text-cyan-100">Estimated net value</h2>
+      <p className="text-lg font-semibold">{profile ? dollars.format(profile.usddd + profile.rewardsUsd + fundValue) : "—"}</p>
       <p className="text-xs text-slate-300">Practice USDDD and rewards are simulated. The total includes the estimated Fund position value.</p>
       {!!profile?.unpriced && <p className="text-xs text-amber-200">Rewards without a current price are excluded.</p>}
     </section>
     <div className="grid grid-cols-2 gap-2">
       <section className={card} aria-label="Practice World stats">
-        <h2 className="mb-2 text-sm font-semibold text-cyan-100">Practice World</h2>
-        <dl className="grid gap-1 text-sm">
+        <h2 className="mb-2 text-xs font-semibold text-cyan-100">Practice World</h2>
+        <dl className="grid gap-1 text-xs">
           <div><dt className="text-slate-300">USDDD</dt><dd>{profile ? number.format(profile.usddd) : "—"}</dd></div>
           <div><dt className="text-slate-300">Rewards value</dt><dd>{profile ? dollars.format(profile.rewardsUsd) : "—"}</dd></div>
           <div><dt className="text-slate-300">Extractions</dt><dd>{profile ? number.format(profile.extractions) : "—"}</dd></div>
@@ -146,15 +153,15 @@ export default function ExplorerProfile({ username, badge, positions, busy, sign
         {!!profile?.startingCredit && <p className="mt-2 text-xs text-cyan-200">{profile.startingCredit} USDDD starting credit available on your first signed-in play.</p>}
       </section>
       <section className={card} aria-label="Fund stats">
-        <h2 className="mb-2 text-sm font-semibold text-cyan-100">Fund</h2>
-        <dl className="grid gap-1 text-sm">
+        <h2 className="mb-2 text-xs font-semibold text-cyan-100">Fund</h2>
+        <dl className="grid gap-1 text-xs">
           <div><dt className="text-slate-300">Funded positions</dt><dd>{number.format(active.length)}</dd></div>
           <div><dt className="text-slate-300">Funded amount</dt><dd>{number.format(funded)} USDT</dd></div>
           <div><dt className="text-slate-300">Estimated position value</dt><dd>{dollars.format(fundValue)}</dd></div>
         </dl>
       </section>
     </div>
-    {message && <p role="status" className="text-sm text-cyan-200">{message}</p>}
-    <button type="button" className="justify-self-start text-sm text-cyan-200 underline underline-offset-4" onClick={signOut} disabled={busy || locked}>Sign out</button>
+    {!choose && message && <p role="status" className="text-xs text-cyan-200">{message}</p>}
+    <button type="button" className="justify-self-start text-xs text-cyan-200 underline underline-offset-4" onClick={signOut} disabled={busy || locked}>Sign out</button>
   </>;
 }
