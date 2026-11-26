@@ -1,5 +1,7 @@
 begin;
 
+set local lock_timeout = '3s';
+
 lock table public.dd_terminal_users in share row exclusive mode;
 
 create table public.flatverse_usernames (
