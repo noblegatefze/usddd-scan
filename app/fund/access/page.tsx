@@ -93,7 +93,7 @@ export default function FundAccess() {
     <a href="/fund" className="text-sky-300">← Fund Network</a>
     <header className="mt-5 rounded-xl border border-slate-700 bg-slate-900/60 p-5">
       <h1 className="text-3xl font-semibold">Fund Network access</h1>
-      <p className="mt-2 text-sm text-slate-300">Read-only Authenticator pilot for invited accounts. Use Fund Network for deposit and withdrawal requests.</p>
+      <p className="mt-2 text-sm text-slate-300">{explorerEnrollment ? "Create an Explorer account or sign in with Google Authenticator. This view is read-only. Use Fund Network for deposit and withdrawal requests." : "Read-only Authenticator pilot for invited accounts. Use Fund Network for deposit and withdrawal requests."}</p>
     </header>
     {positions ? <>
       {explorer && <p className="mt-6 text-sky-300">{explorer.username} · {explorer.badge}</p>}
@@ -108,7 +108,7 @@ export default function FundAccess() {
       <button type="button" disabled={busy} onClick={signOut} className="underline">Sign out</button>
     </> : <>
       <h2 className="mt-6 text-xl">{mode === "login" ? "Sign in" : mode === "start" ? "Set up Google Authenticator" : "Confirm your setup"}</h2>
-      {mode === "start" && <p className="mt-2 text-sm text-slate-300">{explorerEnrollment ? "Choose a username. It’s also your display name. Invited Terminal users can enter their existing username and pass. New Explorers can leave the pass blank." : "Use your Terminal Pass once to link Google Authenticator to your username. Keep access to that Authenticator entry."}</p>}
+      {mode === "start" && <p className="mt-2 text-sm text-slate-300">{explorerEnrollment ? "Choose a username. It’s also your display name. New Explorers can leave Terminal Pass blank. If you were invited to the Fund Authenticator pilot, use your Terminal Pass once to prove ownership of your existing username." : "Use your Terminal Pass once to link Google Authenticator to your username. Keep access to that Authenticator entry."}</p>}
       {mode === "login" && <p className="mt-2 text-sm text-slate-300">Enter your username and the current six-digit code from Google Authenticator.</p>}
       {pending && mode === "finish" && <div className="mt-3 space-y-3">
         <p>Scan this QR code in Google Authenticator, then enter the six-digit code below.</p>
