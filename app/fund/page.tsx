@@ -977,13 +977,15 @@ export default function FundNetworkPage() {
       <style>{".fv-fund{font-family:var(--font-geist-sans),system-ui,sans-serif}.fv-fund .site-header{display:flex;align-items:center;justify-content:space-between;gap:10px 18px;flex-wrap:wrap;padding:11px 17px;border:1px solid #37dcec;border-radius:7px;background:#061c2d}.fv-fund .site-brand{color:#f6fbff;font-size:clamp(21px,2.4vw,31px);font-weight:900;letter-spacing:-.045em;line-height:1.1;white-space:nowrap}.fv-fund .site-brand span{color:#7defff;font-size:.71em}.fv-fund .site-nav{display:flex;align-items:center;flex-wrap:wrap;gap:8px 15px;font-size:14px;font-weight:700}.fv-fund .site-nav>a{color:#f6fbff}.fv-fund .site-cta{display:inline-block;background:linear-gradient(#ffdc54,#ffb400);color:#07121b!important;border:1px solid #ffeb9e;border-radius:6px;padding:7px 13px;font-weight:850;text-align:center}.fv-fund .site-testnet{display:inline-flex;align-items:center;gap:5px;padding:3px 6px;border:1px solid #246893;border-radius:5px;background:#031323;color:#5bff5f;box-shadow:inset 0 1px #84e9ff42,inset 0 -3px #05112285;font-size:10px;font-weight:900;line-height:1;text-transform:uppercase;white-space:nowrap}.fv-fund .site-testnet::before{content:'';width:5px;height:5px;background:currentColor;border-radius:50%;box-shadow:0 0 6px currentColor}.fv-fund .site-footer{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:16px;padding:12px 2px 0;border-top:1px solid #295065;color:#9eb5c7;font-size:12px}.fv-fund .site-footer a{color:#b7dae7}@media(max-width:760px){.fv-fund .site-header{padding:9px 10px}.fv-fund .site-nav{width:100%;font-size:12px;gap:8px 12px}}.fv-fund .fund-shell{max-width:1420px;padding-left:0;padding-right:0}.fv-fund{padding:18px clamp(12px,3vw,48px) 0}.fv-fund>header.site-header{max-width:1420px;margin:auto}.fv-fund .fund-meta{flex-basis:100%;display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;border-top:1px solid #295065;padding-top:8px;font-size:12px;color:#a8c5d4}.fv-fund .fund-meta button{font-weight:700;color:#b7ecfa;cursor:pointer}.fv-fund .fund-hero h1{font-style:normal;text-transform:none;text-shadow:0 3px 22px #020c18}.fv-fund .fund-hero h1 span{display:block;color:#ffda68}.fv-fund .fund-hero{background-image:linear-gradient(90deg,#031221fa,#031221a0 53%,#08314555),url('https://www.digdug.do/flatverse-ice-wall.jpg')!important}.fv-fund .fund-hero .fund-view{margin-top:12px;color:#c8f8ff;text-decoration:underline;text-underline-offset:3px}@media(max-width:760px){.fv-fund{padding:9px 10px 0}.fv-fund .fund-meta{font-size:11px}.fv-fund .fund-hero h1{font-size:clamp(34px,9vw,50px)}}"}</style>
       <header className="site-header">
         <Link className="site-brand" href="/observatory">DIGDUG.DO <span>/ FUND NETWORK</span></Link>
-        <nav className="site-nav" aria-label="Fund Network navigation">
-          <a href="https://www.digdug.do/">Home</a>
-          <Link href="/observatory">Observatory</Link>
-          <a href="https://www.digdug.do/surface-dispatch">Surface Dispatch</a>
-          <a className="site-cta" href="https://play.digdug.do/">Play Flatverse</a>
-        </nav>
-        <div data-explorer-account="" />
+        <div className="dd-account-nav">
+          <nav className="site-nav" aria-label="Fund Network navigation">
+            <a href="https://www.digdug.do/">Home</a>
+            <Link href="/observatory">Observatory</Link>
+            <a href="https://www.digdug.do/surface-dispatch">Surface Dispatch</a>
+            <a className="site-cta" href="https://play.digdug.do/">Play Flatverse</a>
+          </nav>
+          <div data-explorer-account="" />
+        </div>
         <div className="fund-meta">
           <span>Phase: Zero / Pre-Genesis</span>
           <span>Version: {meta?.version ?? "--"}</span>
@@ -998,7 +1000,6 @@ export default function FundNetworkPage() {
       </header>
 
       <Script src="/explorer-account.js" strategy="afterInteractive" />
-      <style>{`@media(max-width:760px){.fv-fund .site-nav{order:2}.fv-fund .fund-meta{order:3}}`}</style>
       {/* ✅ Withdraw receipt modal */}
       {receiptModal.open ? (
         <div className="fixed inset-0 z-[125] flex items-center justify-center">
