@@ -2,6 +2,11 @@
   const accountOrigin = "https://usddd.digdug.do";
   const mount = document.querySelector("[data-explorer-account]");
   if (!mount || document.querySelector(".dd-account-dialog")) return;
+  const accountNav = mount.parentElement;
+  const siteHeader = accountNav?.parentElement;
+  if (siteHeader?.tagName === "HEADER" && accountNav.matches(".dd-account-nav") && accountNav.querySelector(":scope > nav")) {
+    siteHeader.classList.add("dd-account-mobile-header");
+  }
   const play = location.origin === "https://play.digdug.do";
   let linkedUser;
   let linking = false;
@@ -13,17 +18,20 @@
     .dd-account-nav > [data-explorer-account]{margin-inline-start:0}
     #gameFocus .dd-account-nav > #siteMenu{margin-inline-start:0}
     @media(max-width:760px){
-      header:has(> .dd-account-nav > nav){
-        display:grid;grid-template-columns:minmax(0,1fr) auto;
-        align-items:center;column-gap:8px;row-gap:8px
+      .dd-account-mobile-header{position:relative}
+      .dd-account-mobile-header > .dd-account-nav{display:block;width:100%;margin-inline-start:0}
+      .dd-account-mobile-header > .dd-account-nav > :is(nav,.site-nav,.ob-nav){
+        display:flex;flex-wrap:wrap;justify-content:flex-start;
+        width:100%;min-width:0;max-width:100%;gap:7px 12px
       }
-      header > .dd-account-nav:has(> nav){display:contents}
-      header > .dd-account-nav > :is(nav,.site-nav,.ob-nav){
-        grid-column:1 / -1;grid-row:2;display:flex;flex-wrap:wrap;
-        justify-content:flex-start;width:100%;min-width:0;max-width:100%;gap:7px 12px
+      .dd-account-mobile-header > .dd-account-nav > nav > a{min-width:0;max-width:100%;overflow-wrap:anywhere}
+      .dd-account-mobile-header > :is(.site-brand,.ob-brand,a:first-child){max-width:calc(100% - 42px)}
+      .dd-account-mobile-header > .dd-account-nav > [data-explorer-account]{
+        position:absolute;inset-block-start:8px;inset-inline-end:10px;z-index:1
       }
-      header > .dd-account-nav > nav > a{min-width:0;max-width:100%;overflow-wrap:anywhere}
-      header > .dd-account-nav > [data-explorer-account]{grid-column:2;grid-row:1;justify-self:end}
+      .dd-account-mobile-header .dd-account-avatar{width:32px;height:32px;font-size:15px}
+      .dd-account-mobile-header .dd-account-avatar > svg{width:18px;height:18px}
+      .dd-account-mobile-header .dd-account-avatar-badge{width:13px;height:13px;font-size:9px}
     }
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
     .dd-account-avatar{position:relative}
