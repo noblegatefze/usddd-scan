@@ -124,6 +124,11 @@ export default function FundAccess() {
         </>}
         {mode === "start" && <label>Terminal Pass <span className="text-xs text-slate-400">{explorerEnrollment ? "(optional)" : "(one-time setup)"}</span><input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required={!explorerEnrollment} /></label>}
         {mode !== "start" && <label>Six-digit Authenticator code<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>}
+        {mode === "start" && explorerEnrollment && <aside className="rounded-lg border border-amber-400/50 bg-amber-950/30 p-3 text-sm text-amber-100" aria-label="Flatverse Fair Play">
+          <strong>Flatverse Fair Play</strong>
+          <p className="mt-1">Player-operated bots, scripts, macros, and other gameplay automation are prohibited. Confirmed use results in an immediate Flatverse ban and forfeiture of all in-game rewards earned on the account.</p>
+          <p className="mt-2"><a className="underline" href="https://play.digdug.do/#game-rules" target="_blank" rel="noreferrer">Read Game Rules (opens in a new tab)</a> · <a className="underline" href="mailto:usddd@digdug.do">Report a game issue</a></p>
+        </aside>}
         <button disabled={busy} className="rounded-md bg-sky-300 px-4 py-2 font-semibold text-slate-950">{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "start" ? "Continue to Authenticator" : "Verify and sign in"}</button>
         <p role="status" className="text-amber-300">{message}</p>
       </form>
