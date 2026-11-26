@@ -1,5 +1,5 @@
 import { fundAuthenticatorDatabaseAllowed, fundAuthenticatorPilotOwner } from "../../../fund/authenticator-config";
-import { createHash } from "node:crypto";
+import { resolveExplorerFundOwner } from "../../../fund/explorer-owner";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -59,16 +59,8 @@ export async function POST(req: NextRequest) {
       const pilotOwner = fundAuthenticatorPilotOwner();
       const explorerEnabled = process.env.FLATVERSE_EXPLORER_ENROLLMENT === "true";
       if (!pilotOwner && !explorerEnabled) return response({ error: "Fund Authenticator pilot is unavailable." }, 503);
-      const token = req.cookies.get("__Host-ussd-fund-session")?.value;
-      if (!token || !/^[a-f0-9]{64}$/.test(token)) return response({ error: "Sign in to view your positions." }, 401);
-      const { data: session, error: sessionError } = await sb
-        .from("fund_authenticator_sessions").select("terminal_user_id")
-        .eq("token_hash", createHash("sha256").update(token).digest("hex"))
-        .gt("expires_at", new Date().toISOString()).maybeSingle();
-      if (sessionError) return response({ error: "Fund sign-in is unavailable." }, 503);
-      if (!session) return response({ error: "Your session has expired. Sign in again." }, 401);
-      const owner = session.terminal_user_id;
-      if (owner !== pilotOwner && !explorerEnabled) return response({ error: "Your session has expired. Sign in again." }, 401);
+      const owner = await resolveExplorerFundOwner(req, sb);
+      if (!owner) return response({ error: "Sign in to view your positions." }, 401);
       const { data: legacy, error: legacyError } = await sb.from("dd_terminal_users").select("username").eq("id", owner).maybeSingle();
       if (legacyError) return response({ error: "Your account could not be loaded." }, 503);
       if (!legacy) {
@@ -76,7 +68,10 @@ export async function POST(req: NextRequest) {
           .eq("account_id", owner).eq("source", "explorer").maybeSingle();
         if (error) return response({ error: "Your account could not be loaded." }, 503);
         if (!explorer) return response({ error: "Your session has expired. Sign in again." }, 401);
-        return response({ ok: true, positions: [], explorer: { username: explorer.display_name, badge: "Explorer" } });
+        const { data: positions, error: positionError } = await sb.from("fund_positions")
+          .select(SELECT_COLS).eq("terminal_user_id", owner);
+        if (positionError) return response({ error: "Your positions could not be loaded." }, 503);
+        return response({ ok: true, positions, explorer: { username: explorer.display_name, badge: "Explorer" } });
       }
       const { data: positions, error } = await sb.from("fund_positions")
         .select(SELECT_COLS).eq("terminal_user_id", owner);
