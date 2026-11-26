@@ -22,8 +22,9 @@ async function post(path: string, body: object) {
 }
 
 export default function FundAccess() {
-  const [mode, setMode] = useState<"login" | "start" | "finish">("login");
+  const [mode, setMode] = useState<"login" | "new" | "legacy" | "finish">("login");
   const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string } | null>(null);
+  const [embedded, setEmbedded] = useState(false);
   const [explorerEnrollment, setExplorerEnrollment] = useState(false);
   const [explorer, setExplorer] = useState<{ username: string; badge: string } | null>(null);
   const [positions, setPositions] = useState<Position[] | null>(null);
@@ -37,6 +38,7 @@ export default function FundAccess() {
   }
 
   useEffect(() => {
+    setEmbedded(window.parent !== window);
     const controller = new AbortController();
     void loadPositions().catch(() => {});
     void fetch("/api/fund/authenticator", { cache: "no-store", signal: controller.signal })
@@ -55,11 +57,11 @@ export default function FundAccess() {
     try {
       const data = await post("authenticator", mode === "finish"
         ? { action: mode, challenge: pending?.challenge, code: fields.get("code") }
-        : mode === "start"
-          ? { action: mode, username: fields.get("username"), pass: fields.get("pass") }
+        : mode === "new" || mode === "legacy"
+          ? { action: "start", username: fields.get("username"), pass: mode === "legacy" ? fields.get("pass") : "" }
           : { action: mode, username: fields.get("username"), code: fields.get("code") });
       form.reset();
-      if (mode === "start") {
+      if (mode === "new" || mode === "legacy") {
         setPending(data);
         setMode("finish");
       } else {
@@ -89,10 +91,10 @@ export default function FundAccess() {
   }
 
   const field = "block w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2";
-  return <main className="mx-auto max-w-3xl px-5 py-10 text-slate-100">
-    <a href="/fund" className="text-sky-300">← Fund Network</a>
+  return <main className="mx-auto max-w-3xl bg-[#071c2f] px-5 py-5 text-slate-100">
+    {!embedded && <a href="/fund" className="text-sky-300">← Fund Network</a>}
     <header className="mt-5 rounded-xl border border-slate-700 bg-slate-900/60 p-5">
-      <h1 className="text-3xl font-semibold">Fund Network access</h1>
+      <h1 className="text-2xl font-semibold">Explorer accounts</h1>
       <p className="mt-2 text-sm text-slate-300">{explorerEnrollment ? "Create an Explorer account or sign in with Google Authenticator. This view is read-only. Use Fund Network for deposit and withdrawal requests." : "Read-only Authenticator pilot for invited accounts. Use Fund Network for deposit and withdrawal requests."}</p>
     </header>
     {positions ? <>
@@ -107,8 +109,13 @@ export default function FundAccess() {
       </li>)}</ul>
       <button type="button" disabled={busy} onClick={signOut} className="underline">Sign out</button>
     </> : <>
-      <h2 className="mt-6 text-xl">{mode === "login" ? "Sign in" : mode === "start" ? "Set up Google Authenticator" : "Confirm your setup"}</h2>
-      {mode === "start" && <p className="mt-2 text-sm text-slate-300">{explorerEnrollment ? "Choose a username. It’s also your display name. New Explorers can leave Terminal Pass blank. If you were invited to the Fund Authenticator pilot, use your Terminal Pass once to prove ownership of your existing username." : "Use your Terminal Pass once to link Google Authenticator to your username. Keep access to that Authenticator entry."}</p>}
+      {mode !== "finish" && <div role="group" aria-label="Account options" className="mt-4 flex flex-wrap gap-2">
+        {([["legacy", "Migrate a Legacy account"], ["new", "Create a new Explorer account"], ["login", "Already enrolled? Sign in"]] as const).map(([option, label]) => <button key={option} type="button" disabled={busy} aria-pressed={mode === option} className="rounded-md border border-sky-500 px-3 py-2 text-sm aria-pressed:bg-sky-950" onClick={() => { setMode(option); setMessage(""); }}>{label}</button>)}
+      </div>}
+      <h2 className="mt-6 text-xl">{mode === "login" ? "Sign in" : mode === "finish" ? "Confirm your setup" : mode === "legacy" ? "Migrate your Legacy account" : "Create an Explorer account"}</h2>
+      {mode === "legacy" && <p className="mt-2 text-sm text-slate-300">Verify your existing username and Terminal Pass once. The Legacy Badge starts with 25 USDDD and the Legacy Backer Badge starts with 50 USDDD in the Practice World.</p>}
+      {mode === "new" && <p className="mt-2 text-sm text-slate-300">Choose a username and set up Google Authenticator. New Explorers start with 10 USDDD in the Practice World.</p>}
+      {mode === "new" && !explorerEnrollment && <p role="status" className="mt-2 text-amber-300">Public Explorer enrollment is pending.</p>}
       {mode === "login" && <p className="mt-2 text-sm text-slate-300">Enter your username and the current six-digit code from Google Authenticator.</p>}
       {pending && mode === "finish" && <div className="mt-3 space-y-3">
         <p>Scan this QR code in Google Authenticator, then enter the six-digit code below.</p>
@@ -122,22 +129,18 @@ export default function FundAccess() {
         {mode !== "finish" && <>
           <label>Username<input className={field} name="username" autoComplete="username" maxLength={100} required /></label>
         </>}
-        {mode === "start" && <label>Terminal Pass <span className="text-xs text-slate-400">{explorerEnrollment ? "(optional)" : "(one-time setup)"}</span><input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required={!explorerEnrollment} /></label>}
-        {mode !== "start" && <label>Six-digit Authenticator code<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>}
-        {mode === "start" && explorerEnrollment && <aside className="rounded-lg border border-amber-400/50 bg-amber-950/30 p-3 text-sm text-amber-100" aria-label="Flatverse Fair Play">
+        {mode === "legacy" && <label>Terminal Pass<input className={field} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
+        {(mode === "login" || mode === "finish") && <label>Six-digit Authenticator code<input className={field} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>}
+        {(mode === "new" || mode === "legacy") && explorerEnrollment && <aside className="rounded-lg border border-amber-400/50 bg-amber-950/30 p-3 text-sm text-amber-100" aria-label="Flatverse Fair Play">
           <strong>Flatverse Fair Play</strong>
           <p className="mt-1">Player-operated bots, scripts, macros, and other gameplay automation are prohibited. Confirmed use results in an immediate Flatverse ban and forfeiture of all in-game rewards earned on the account.</p>
           <p className="mt-2"><a className="underline" href="https://play.digdug.do/#game-rules" target="_blank" rel="noreferrer">Read Game Rules (opens in a new tab)</a> · <a className="underline" href="mailto:usddd@digdug.do">Report a game issue</a></p>
         </aside>}
-        <button disabled={busy} className="rounded-md bg-sky-300 px-4 py-2 font-semibold text-slate-950">{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "start" ? "Continue to Authenticator" : "Verify and sign in"}</button>
+        <button disabled={busy || (mode === "new" && !explorerEnrollment)} className="rounded-md bg-sky-300 px-4 py-2 font-semibold text-slate-950">{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "finish" ? "Verify and sign in" : "Continue to Authenticator"}</button>
         <p role="status" className="text-amber-300">{message}</p>
       </form>
-      <button type="button" disabled={busy} className="underline" onClick={() => {
-        setPending(null);
-        setMessage("");
-        setMode(mode === "login" ? "start" : "login");
-      }}>{mode === "login" ? "Set up account" : "Back to sign-in"}</button>
-      <p className="mt-4 text-sm">Lost access to your Authenticator? Contact Fund support for manual review.</p>
+      {mode === "finish" && <button type="button" disabled={busy} className="underline" onClick={() => { setPending(null); setMessage(""); setMode("login"); }}>Back to sign-in</button>}
+      <p className="mt-4 text-sm">Lost access to your Authenticator? Email <a className="underline" href="mailto:usddd@digdug.do">usddd@digdug.do</a> for manual review.</p>
     </>}
     {positions && <p role="status" className="mt-3 text-amber-300">{message}</p>}
   </main>;
