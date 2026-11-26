@@ -8,6 +8,10 @@
   const style = document.createElement("style");
   style.textContent = `
     [data-explorer-account]{margin-left:auto;display:inline-flex;align-items:center;flex:none}
+    .dd-account-nav{display:flex;align-items:center;justify-content:flex-end;gap:clamp(8px,1.2vw,16px);margin-inline-start:auto;min-width:0;max-width:100%}
+    .dd-account-nav > .site-nav{justify-content:flex-end;width:auto;min-width:0}
+    .dd-account-nav > [data-explorer-account]{margin-inline-start:0}
+    #gameFocus .dd-account-nav > #siteMenu{margin-inline-start:0}
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
     .dd-account-avatar:focus-visible,.dd-account-close:focus-visible{outline:2px solid #ffdb4d;outline-offset:3px}
     .dd-account-dialog{position:fixed;inset:0;margin:auto;width:min(660px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:1px solid #4bbbce;border-radius:12px;background:#071c2f;color:#effbff}
