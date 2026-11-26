@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes, createHash, createCipheriv } from "crypto";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+
+import { isExplorerFundActionOrigin, resolveExplorerFundOwner } from "../../../fund/explorer-owner";
 
 function env(name: string): string {
   const v = process.env[name];
@@ -26,7 +28,7 @@ function makePositionRef(): string {
   return `FN-${b}`;
 }
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const supabaseUrl = env("SUPABASE_URL");
     const supabaseKey = env("SUPABASE_SERVICE_ROLE_KEY");
@@ -40,6 +42,20 @@ export async function POST() {
     const encSecret = env("FUND_KEY_ENC_SECRET");
 
     const sb = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+
+    const body = await req.json().catch(() => null);
+    const nativeEnabled = process.env.FUND_NATIVE_ACTIONS_ENABLED === "true";
+    let explorerOwner: string | null = null;
+    if (body?.explorer === true) {
+      if (!nativeEnabled || !isExplorerFundActionOrigin(req)) return NextResponse.json({ error: "Explorer deposits are unavailable." }, { status: 403 });
+      if (typeof body.request_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.request_id)) {
+        return NextResponse.json({ error: "Invalid deposit request." }, { status: 400 });
+      }
+      explorerOwner = await resolveExplorerFundOwner(req, sb);
+      if (!explorerOwner) return NextResponse.json({ error: "Sign in to create a deposit address." }, { status: 401 });
+    } else if (nativeEnabled) {
+      return NextResponse.json({ error: "Create new deposit addresses through Fund Network." }, { status: 403 });
+    }
 
     // Maintenance gate (DB-authoritative)
     const { data: flags, error: flagsErr } = await sb.rpc("rpc_admin_flags");
@@ -55,6 +71,15 @@ export async function POST() {
     const acct = privateKeyToAccount(priv);
     const depositAddress = acct.address.toLowerCase();
 
+    if (explorerOwner) {
+      const ref = "FN-" + createHash("sha256").update(explorerOwner + ":" + body.request_id).digest("hex").slice(0, 24).toUpperCase();
+      const { data: position, error } = await sb.rpc("fund_issue_explorer_address", {
+        p_owner: explorerOwner, p_ref: ref, p_address: depositAddress, p_min: min, p_max: max,
+        p_encrypted_key: encryptPrivKeyHex(priv, encSecret),
+      });
+      if (error || !position) return NextResponse.json({ error: "Could not create a deposit address." }, { status: 503 });
+      return NextResponse.json({ ok: true, position }, { headers: { "Cache-Control": "no-store" } });
+    }
     const positionRef = makePositionRef();
 
     // Insert position
