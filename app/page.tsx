@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import Script from "next/script";
 import LiveRefresh, { RankResetCountdown } from "./observatory/live-refresh";
 
 export const metadata = { title: "Flatverse Observatory | DIGDUG.DO", alternates: { canonical: "https://usddd.digdug.do/" } };
@@ -64,14 +65,18 @@ export default async function ObservatoryPage() {
       <div className="ob-shell">
         <header className="ob-head">
           <a href="https://www.digdug.do/" className="ob-brand">DIGDUG.DO <span>/ USDDD SCAN</span></a>
-          <nav className="ob-nav" aria-label="Observatory">
+          <div className="dd-account-nav">
+            <nav className="ob-nav" aria-label="Observatory">
             <a href="https://www.digdug.do/">Home</a>
             <a href={dispatch}>Surface Dispatch</a>
             <Link href="/fund">Fund Network</Link>
             <span className="ob-testnet" title="Testnet rewards are simulated. Eligible Mainnet rewards will be real and withdrawable after launch.">Live - Testnet</span>
             <a className="ob-play" href={play}>Play Flatverse</a>
-          </nav>
+            </nav>
+            <div data-explorer-account="" />
+          </div>
         </header>
+        <Script src="/explorer-account.js" strategy="afterInteractive" />
         <section className="ob-hero"><h1>Flatverse <span>Observatory</span></h1><p>Practice World · Simulated rewards</p></section>
         {snapshot?.worldActive === false && <p className="ob-state">World idle · Simulated explorers resume when someone plays.{snapshot.lastWorldTick != null && <> Last game activity {timestamp.format(snapshot.lastWorldTick)} UTC.</>}</p>}
         {!snapshot && <p className="ob-state" role="status">Practice activity is temporarily unavailable.</p>}
