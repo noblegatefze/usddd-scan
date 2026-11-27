@@ -246,7 +246,7 @@ export default function FundAccess() {
           <button type="button" className={primary} onClick={() => show("legacy")}>Yes</button>
           <button type="button" className="rounded-md border border-cyan-700 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-950" onClick={() => show("new")}>Skip</button>
         </div>
-        <p className="text-xs text-amber-200">By skipping, you may be forfeiting bonus USDDD rewards on account creation.</p>
+        <p className="text-xs text-amber-200">By skipping, you may be forfeiting bonus USDDD rewards as a Legacy Terminal user.</p>
         {back}
       </> : wizardScreen === "qr" && pending ? <>
         <h1 className={heading}>Set up Google Authenticator</h1>
