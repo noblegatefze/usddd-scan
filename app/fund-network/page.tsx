@@ -71,6 +71,22 @@ export default function FundNetwork() {
 
         </div>
       </details>
+      <section aria-labelledby="usddd-pricing-title" className="min-w-0 rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
+        <h2 id="usddd-pricing-title" className="mb-3 text-lg font-bold text-cyan-100">USDDD Pricing Chart</h2>
+        <iframe
+          title="Live USDDD / USDT price chart on PancakeSwap V2"
+          src="https://www.geckoterminal.com/bsc/pools/0xbbb461d2246fad4eaa7306f369751bf7b72320a1?embed=1&info=0&swaps=0&light_chart=0"
+          className="block h-[320px] w-full rounded-md border border-cyan-900 bg-[#071422] sm:h-[440px]"
+          loading="lazy"
+          allowFullScreen
+        />
+        <div className="mt-3 space-y-2 text-sm leading-relaxed text-slate-200">
+          <p>To back USDDD, you can provide liquidity to the USDDD / USDT pool on PancakeSwap and earn a share of trading fees. Check PancakeSwap for the latest estimated yield, if displayed.</p>
+          <a className="inline-block font-semibold text-cyan-200 underline underline-offset-4" href="https://pancakeswap.finance/v2/add/0x03f65216f340bac39c8d1911288b1c7ca071e9c3/0x55d398326f99059ff775485246999027b3197955?chain=bsc" target="_blank" rel="noopener noreferrer">View USDDD / USDT on PancakeSwap</a>
+          <p className="text-xs text-slate-300"><strong>Disclaimer.</strong> Pool liquidity and daily trading volume show where the market stands today. More daily exploration may support deeper liquidity and higher trading volume over time, but neither is assured. Estimated yields can change. Trading crypto and providing liquidity involve risks, including price volatility, impermanent loss, and loss of capital.</p>
+          <a className="inline-block text-xs text-cyan-200 underline underline-offset-4" href="https://www.geckoterminal.com/bsc/pools/0xbbb461d2246fad4eaa7306f369751bf7b72320a1" target="_blank" rel="noopener noreferrer">Open chart on GeckoTerminal</a>
+        </div>
+      </section>
       <details id="positions" open className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
         <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Your positions</summary>
         <div className="mt-3">
