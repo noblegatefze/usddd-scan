@@ -76,7 +76,10 @@ export async function POST(req: NextRequest) {
           .eq("account_id", owner).eq("source", "explorer").maybeSingle();
         if (error) return response({ error: "Your account could not be loaded." }, 503);
         if (!explorer) return response({ error: "Your session has expired. Sign in again." }, 401);
-        return response({ ok: true, positions: [], explorer: { username: explorer.display_name, badge: "Explorer" } });
+        const { data: backing, error: backingError } = await sb.from("fund_positions").select("id")
+          .eq("terminal_user_id", owner).gt("funded_usdt", 0).limit(1).maybeSingle();
+        if (backingError) return response({ error: "Your badge could not be loaded." }, 503);
+        return response({ ok: true, positions: [], explorer: { username: explorer.display_name, badge: backing ? "Backer Badge" : "Explorer Badge" } });
       }
       const { data: positions, error } = await sb.from("fund_positions")
         .select(SELECT_COLS).eq("terminal_user_id", owner);
