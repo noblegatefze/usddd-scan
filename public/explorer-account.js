@@ -82,7 +82,7 @@
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
     .dd-account-avatar{position:relative}
     .dd-account-avatar-image{width:100%;height:100%;object-fit:cover;border-radius:50%}
-    .dd-account-avatar-badge{position:absolute;right:-4px;top:-4px;display:grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid #0b1e30;background:#f8cd67;color:#101b26;font-size:11px}
+    .dd-account-avatar-badge{position:absolute;right:-4px;top:-4px;display:grid;place-items:center;width:17px;height:17px;border-radius:50%;filter:drop-shadow(0 1px 2px #000b)}
     .dd-account-avatar:focus-visible,.dd-account-close:focus-visible{outline:2px solid #ffdb4d;outline-offset:3px}
     .dd-account-dialog{position:fixed;inset:0;margin:auto;width:min(660px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:1px solid #4bbbce;border-radius:12px;background:#071c2f;color:#effbff}
     .dd-account-dialog::backdrop{background:#020c19bb}
@@ -331,11 +331,13 @@
     const preset = Object.hasOwn(avatarColors, avatar) ? avatar : "blue";
     image.src = custom ? avatar : `https://usddd.digdug.do/passport-avatars/${preset}.jpg`;
     button.style.backgroundColor = avatarColors[preset];
-    const emblem = document.createElement("span");
+    const emblem = document.createElement("img");
     emblem.className = "dd-account-avatar-badge";
     emblem.title = badge;
     emblem.setAttribute("aria-hidden","true");
-    emblem.textContent = badge.endsWith("Backer Badge") ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
+    const kind = badge === "Legacy Backer Badge" ? "legacy-backer" : badge === "Backer Badge" ? "backer" : badge === "Legacy Badge" ? "legacy" : "explorer";
+    emblem.alt = "";
+    emblem.src = accountOrigin + "/passport-badges/" + kind + ".svg";
     button.replaceChildren(image,emblem);
   }
   let playStatus = "unknown";

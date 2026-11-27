@@ -41,10 +41,17 @@ export default function RankProfiles({ ranks }: { ranks: Rank[] }) {
           <button type="button" autoFocus className="size-10 shrink-0 rounded-md border border-cyan-700 text-xl" aria-label="Close explorer profile" onClick={() => dialog.current?.close()}>×</button>
         </header>
         <dl className="mt-4 grid gap-3 rounded-lg border border-slate-700 p-3">
-          <div><dt className="text-xs text-cyan-200">Badge type</dt><dd>{selected.badge ?? (selected.bot ? "Simulated explorer" : "Unavailable")}</dd></div>
+          <div><dt className="text-xs text-cyan-200">Badge type</dt><dd className="flex items-center gap-2">
+            {(selected.bot || selected.badge?.endsWith("Badge")) && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`/passport-badges/${selected.badge === "Legacy Backer Badge" ? "legacy-backer" : selected.badge === "Backer Badge" ? "backer" : selected.badge === "Legacy Badge" ? "legacy" : "explorer"}.svg`} alt="" className="size-6" />
+            )}
+            {selected.bot ? "Explorer" : selected.badge ?? "Unavailable"}
+          </dd></div>
           <div><dt className="text-xs text-cyan-200">Estimated Practice World net value</dt><dd>{selected.netValue == null ? "Unavailable" : dollars.format(selected.netValue)}</dd></div>
-          <div><dt className="text-xs text-cyan-200">First recorded dig</dt><dd>{selected.firstDigAt ? <time dateTime={new Date(selected.firstDigAt).toISOString()}>{date.format(selected.firstDigAt)}</time> : "No date on record"}</dd></div>
+          <div><dt className="text-xs text-cyan-200">{selected.bot ? "First dig since tracking began" : "First recorded dig"}</dt><dd>{selected.firstDigAt ? <time dateTime={new Date(selected.firstDigAt).toISOString()}>{date.format(selected.firstDigAt)}</time> : "No date on record"}</dd></div>
         </dl>
+        {selected.bot && <p className="mt-3 text-xs text-slate-300">Practice data. The estimate includes the wallet and sponsor rewards tracked since balance recording began.</p>}
       </>}
     </dialog>
   </>;
