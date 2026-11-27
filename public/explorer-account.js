@@ -41,12 +41,10 @@
     .dd-navigation-header > .dd-account-nav,.dd-navigation-game > .dd-account-nav{flex:none;gap:8px}
     .dd-navigation-game > .dd-navigation-title{font-size:clamp(13px,2.25vw,21px);margin-right:auto}
     .dd-account-nav > details.dd-navigation{position:relative;margin:0!important;z-index:20;flex:none}
-    .dd-account-nav > details.dd-navigation > summary{box-sizing:border-box;display:grid;place-content:center;justify-items:center;gap:4px;width:42px;height:42px;padding:0;border:1px solid #6089a3;border-radius:8px;background:#102742;cursor:pointer;list-style:none}
+    .dd-account-nav > details.dd-navigation > summary{box-sizing:border-box;display:grid;place-content:center;width:auto;height:42px;padding:0 11px;border:1px solid #ffeb9e;border-radius:8px;background:#ffd34c;color:#181f2a;font:850 12px system-ui;cursor:pointer;list-style:none}
+    .dd-account-nav > details.dd-navigation > summary:hover,.dd-navigation[open] > summary{background:#ffe17a}
+    @media(max-width:380px){.dd-account-nav > details.dd-navigation > summary{padding-inline:7px;font-size:10px}.dd-navigation-header > .dd-navigation-title{font-size:14px!important}}
     .dd-navigation summary::-webkit-details-marker{display:none}
-    .dd-navigation summary span{display:block;width:18px;height:2px;background:#e8f5ff;transition:transform .18s ease,opacity .18s ease}
-    .dd-navigation[open] summary span:first-child{transform:translateY(6px) rotate(45deg)}
-    .dd-navigation[open] summary span:nth-child(2){opacity:0}
-    .dd-navigation[open] summary span:last-child{transform:translateY(-6px) rotate(-45deg)}
     .dd-navigation > .dd-navigation-panel{position:absolute;inset:auto 0 auto auto;top:calc(100% + 7px);display:grid;gap:4px;width:min(246px,calc(100vw - 70px));padding:8px;border:1px solid #6089a3;border-radius:10px;background:#0c213b;box-shadow:0 8px 22px #0006;z-index:21}
     .dd-navigation:not([open]) > .dd-navigation-panel{display:none}
     .dd-navigation[open] > .dd-navigation-panel{animation:dd-open .18s ease-out}
@@ -59,7 +57,7 @@
     .dd-navigation-status{display:block;padding:5px 10px;color:#aac9de;font:12px system-ui}
     @media(max-width:760px){.dd-navigation-header > .dd-navigation-title{font-size:clamp(15px,4.5vw,21px)}}
     @media(max-width:540px){#gameFocus.dd-navigation-game{display:grid;grid-template-columns:auto auto 1fr;row-gap:5px}.dd-navigation-game > .dd-navigation-title{grid-column:1/3;grid-row:1}.dd-navigation-game > .dd-account-nav{grid-column:3;grid-row:1}.dd-navigation-game > #focusTop,.dd-navigation-game > #focusBottom{grid-row:2}}
-    @media(prefers-reduced-motion:reduce){.dd-navigation[open] > .dd-navigation-panel{animation:none}.dd-navigation summary span{transition:none}}
+    @media(prefers-reduced-motion:reduce){.dd-navigation[open] > .dd-navigation-panel{animation:none}}
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
     .dd-account-avatar{position:relative}
     .dd-account-avatar-image{width:65%;height:65%;object-fit:cover;border-radius:50%;opacity:.6}
@@ -94,12 +92,8 @@
     const menu = gameMenu || document.createElement("details");
     menu.classList.add("dd-navigation");
     const toggle = menu.querySelector("summary") || document.createElement("summary");
-    toggle.setAttribute("aria-label", "Site navigation");
-    toggle.replaceChildren(...Array.from({length:3}, () => {
-      const line = document.createElement("span");
-      line.setAttribute("aria-hidden", "true");
-      return line;
-    }));
+    toggle.setAttribute("aria-label", "FLATVERSE site navigation");
+    toggle.textContent = "FLATVERSE";
     if (!toggle.parentNode) menu.append(toggle);
     const links = menu.querySelector("nav") || document.createElement("nav");
     links.setAttribute("aria-label", "DIGDUG.DO sites");
