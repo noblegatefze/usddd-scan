@@ -91,10 +91,23 @@
     .dd-account-dialog .dd-account-frame{height:min(var(--account-height,340px),calc(100dvh - var(--account-top,16px) - 63px))}
     .dd-account-dialog::backdrop{background:#020c1966}
     .dd-account-heading{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #265374;font:700 16px system-ui}
+    .dd-passport-title{display:flex;align-items:center;gap:8px;min-width:0}
+    .dd-passport-brand{display:inline-grid;place-items:center;padding:5px 8px;border:1px solid #ffeb9e;border-radius:8px;background:#ffd34c;color:#181f2a;font:850 12px system-ui}
+    .dd-passport-icon{flex:none;width:29px;height:17px;color:#65e9ff;filter:drop-shadow(0 0 3px #11adff)}
     .dd-account-close{background:none;border:0;color:#effbff;cursor:pointer;font:24px system-ui}
     .dd-account-frame{display:block;width:100%;height:min(680px,calc(100dvh - 83px));border:0;background:#071c2f}
   `;
   document.head.append(style);
+
+  function createWordmark() {
+    const wordmark = document.createElement("span");
+    wordmark.className = "dd-navigation-wordmark";
+    wordmark.textContent = "FLAT";
+    const verse = document.createElement("span");
+    verse.textContent = "VERSE";
+    wordmark.append(verse);
+    return wordmark;
+  }
 
   const destinations = [
     ["Home", "HOME", "https://www.digdug.do/"],
@@ -114,13 +127,7 @@
     menu.classList.add("dd-navigation");
     const toggle = menu.querySelector("summary") || document.createElement("summary");
     toggle.setAttribute("aria-label", "FLATVERSE site navigation");
-    const wordmark = document.createElement("span");
-    wordmark.className = "dd-navigation-wordmark";
-    wordmark.textContent = "FLAT";
-    const verse = document.createElement("span");
-    verse.textContent = "VERSE";
-    wordmark.append(verse);
-    toggle.replaceChildren(wordmark);
+    toggle.replaceChildren(createWordmark());
     if (!toggle.parentNode) menu.append(toggle);
     const links = menu.querySelector("nav") || document.createElement("nav");
     links.setAttribute("aria-label", "DIGDUG.DO sites");
@@ -205,7 +212,25 @@
   dialog.setAttribute("aria-label", "Flatverse Passport");
   const heading = document.createElement("div");
   heading.className = "dd-account-heading";
-  heading.textContent = "Flatverse Passport";
+  const passportTitle = document.createElement("span");
+  passportTitle.className = "dd-passport-title";
+  const passportBrand = document.createElement("span");
+  passportBrand.className = "dd-passport-brand";
+  passportBrand.append(createWordmark());
+  passportTitle.append(passportBrand, "Passport");
+  const firmament = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  firmament.classList.add("dd-passport-icon");
+  firmament.setAttribute("viewBox", "0 0 34 20");
+  firmament.setAttribute("aria-hidden", "true");
+  const dome = document.createElementNS(firmament.namespaceURI, "path");
+  dome.setAttribute("d", "M1 17h32M3 17a14 14 0 0 1 28 0M9 17c0-7 3.5-12 8-14 4.5 2 8 7 8 14M4 12q13-8 26 0");
+  dome.setAttribute("fill", "none");
+  dome.setAttribute("stroke", "currentColor");
+  dome.setAttribute("stroke-width", "1.45");
+  dome.setAttribute("stroke-linecap", "round");
+  firmament.append(dome);
+  passportTitle.append(firmament);
+  heading.append(passportTitle);
   const close = document.createElement("button");
   close.type = "button";
   close.className = "dd-account-close";
