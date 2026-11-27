@@ -18,7 +18,7 @@ const field = "min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px
 function Avatar({ choice, badge, small = false }: { choice: string; badge?: string; small?: boolean }) {
   const background = colors[choice as keyof typeof colors];
   const custom = /^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(choice);
-  const icon = badge === "Legacy Backer Badge" ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
+  const icon = badge?.endsWith("Backer Badge") ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
   return <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300/40 ${small ? "size-6" : "size-11"}`} style={{ backgroundColor: background ?? colors.blue }}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={custom ? choice : favicon} alt="" className={custom ? "size-full rounded-full object-cover" : "size-2/3 rounded-full opacity-60"} />
