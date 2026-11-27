@@ -161,7 +161,17 @@ export async function POST(req: NextRequest) {
       const username = legacy.data?.username ?? explorer?.data?.display_name;
       if (!username) return deny();
       const startingCredit = 10 + (legacy.data ? 15 : 0) + (funded.data ? 25 : 0);
-      return json({ id, username, startingCredit, expiresAt: session.expires_at });
+      let legacyFirstDigAt: number | undefined;
+      if (legacy.data) {
+        try {
+          const first = await db.from("stats_events").select("created_at").eq("terminal_user_id", id)
+            .eq("event", "dig_success").not("created_at", "is", null)
+            .order("created_at", { ascending: true }).limit(1).maybeSingle();
+          const timestamp = Date.parse(first.data?.created_at ?? "");
+          if (!first.error && Number.isFinite(timestamp)) legacyFirstDigAt = timestamp;
+        } catch { /* Historical records are optional during sign-in. */ }
+      }
+      return json({ id, username, startingCredit, legacyFirstDigAt, expiresAt: session.expires_at });
     }
 
     const client = req.headers.get("x-vercel-forwarded-for")?.split(",")[0].trim() || "unknown";

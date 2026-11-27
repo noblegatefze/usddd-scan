@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
+import RankProfiles, { type Rank } from "./observatory/rank-profiles";
 import LiveRefresh, { RankResetCountdown } from "./observatory/live-refresh";
 
 export const metadata: Metadata = {
@@ -47,7 +48,7 @@ type Snapshot = {
   captures24h?: { extractions: number; finds: number; valueCents: number; goldenFinds?: number; trackingSince: number; tokens: { symbol: string; amount: string }[] } | null;
   recentFinds?: { at: number; tokens: { symbol: string; amount: string; usdCents: number | null }[] }[];
   lastGoldenExtraction?: { at: number; tokens: { symbol: string; amount: string; usdCents: number | null }[] } | null;
-  leaderboard: { name: string; bot: boolean; score: number; runs?: number }[];
+  leaderboard: Rank[];
 };
 
 async function getSnapshot(): Promise<Snapshot | null> {
@@ -169,7 +170,7 @@ export default async function ObservatoryPage() {
               </> : <p>24-hour totals are temporarily unavailable.</p>}
             </section>
             <section className="ob-panel"><h2>Daily Ranks</h2><p>Top ten · Resets in <RankResetCountdown /></p>
-              {snapshot?.leaderboard.length ? <ol className="ob-board">{snapshot.leaderboard.slice(0, 10).map((actor, index) => <li key={index}><span>{index + 1}.</span><span>{actor.name}{actor.runs != null && <small> · {actor.runs} runs</small>}</span><strong>${(actor.score / 100).toFixed(2)}</strong></li>)}</ol> : <p>No standings available.</p>}
+              {snapshot?.leaderboard.length ? <RankProfiles ranks={snapshot.leaderboard.slice(0, 10)} /> : <p>No standings available.</p>}
             </section>
             <div className="ob-lower">
               <section className="ob-panel"><a href={dispatch}>Surface Dispatch ›</a><p>Launches, maintenance, and field updates.</p></section>
