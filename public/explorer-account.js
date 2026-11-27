@@ -97,7 +97,27 @@
     .dd-account-close{background:none;border:0;color:#effbff;cursor:pointer;font:24px system-ui}
     .dd-account-frame{display:block;width:100%;height:min(680px,calc(100dvh - 83px));border:0;background:#071c2f}
   `;
+  style.textContent += `
+    .dd-about-dialog{box-sizing:border-box;width:min(540px,calc(100vw - 24px));max-height:calc(100dvh - 32px);padding:16px;border:1px solid #6089a3;border-radius:12px;background:#0c213b;color:#eff7ff;font:14px/1.5 system-ui}
+    .dd-about-dialog::backdrop{background:#020c19bb}
+    .dd-about-dialog > header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+    .dd-about-dialog h2{margin:0;font:750 19px system-ui}
+    .dd-about-content{display:grid;gap:10px;font:14px/1.5 system-ui;text-align:start}
+    .dd-about-content img{display:block;width:100%;max-height:145px;object-fit:cover;border-radius:8px}
+    .dd-about-content section{display:grid;gap:8px;padding:12px;border:1px solid #315670;border-radius:8px;background:#102943}
+    .dd-about-content h3,.dd-about-content h4,.dd-about-content p{margin:0}
+    .dd-about-content h3{color:#75ddf2;font-size:15px}
+    .dd-about-content h4{font-size:14px}
+    .dd-about-content table{width:100%;border-collapse:collapse;color:inherit;font:inherit}
+    .dd-about-content :is(th,td){padding:4px 0;border-bottom:1px solid #315670;text-align:start}
+    .dd-about-content :is(th,td):last-child{text-align:end}
+  `;
   document.head.append(style);
+
+  const aboutContent = document.createElement("template");
+  aboutContent.innerHTML = "<div class=\"dd-about-content\">\n  <p>Flatverse is a shared exploration game. Dig beyond the Ice Wall and bring Blue Orbs back to the surface.</p>\n  <img src=\"https://www.digdug.do/flatverse-ice-wall.jpg\" alt=\"The frozen frontier beyond the Ice Wall\" loading=\"lazy\">\n  <section><h3>Lore</h3><div><h4>The last transmission</h4><p>An intelligence from beyond the Ice Wall seized the old Terminal. It studied the Zero Phase dig records and sent explorers a map to what lay beneath the ice. Then ToastPunk, the original founder, vanished.</p></div>\n<div><h4>The prisons below</h4><p>Far beneath each region, a narrow shaft leads to a prison. Step onto a portal to travel to one of the other prisons at random. Go deep enough and you might glimpse ToastPunk behind bars before he disappears again.</p></div></section>\n  <section><h3>Benefits</h3><p>Your Flatverse Passport keeps your explorer name, balance, rewards, and extraction stats together. Guest progress carries over when you set it up in the same browser.</p></section>\n  <section><h3>Testnet bonus credits</h3>\n    <table aria-label=\"Testnet bonus credits\"><thead><tr><th scope=\"col\">Badge</th><th scope=\"col\">Bonus USDDD</th></tr></thead><tbody>\n      <tr><th scope=\"row\">Explorer Badge</th><td>10</td></tr>\n      <tr><th scope=\"row\">Legacy Badge</th><td>25</td></tr>\n      <tr><th scope=\"row\">Backer Badge</th><td>35</td></tr>\n      <tr><th scope=\"row\">Legacy Backer Badge</th><td>50</td></tr>\n    </tbody></table>\n    <p>Your bonus credits are included in your USDDD balance. Testnet rewards are simulated.</p>\n  </section>\n</div>";
+  const gameAbout = document.querySelector("template#guide-about");
+  if (gameAbout) gameAbout.content.replaceChildren(aboutContent.content.cloneNode(true));
 
   function createWordmark() {
     const wordmark = document.createElement("span");
@@ -181,6 +201,35 @@
     });
     if (gameMenu) destinationLinks.unshift(title);
     links.prepend(...destinationLinks);
+    if (!gameMenu) {
+      const about = document.createElement("dialog");
+      about.className = "dd-about-dialog";
+      about.setAttribute("aria-labelledby", "dd-about-title");
+      const heading = document.createElement("header");
+      const title = document.createElement("h2");
+      title.id = "dd-about-title";
+      title.textContent = "What is Flatverse?";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "dd-account-close";
+      close.setAttribute("aria-label", "Close What is Flatverse?");
+      close.textContent = "×";
+      close.addEventListener("click", () => about.close());
+      heading.append(title, close);
+      about.append(heading, aboutContent.content.cloneNode(true));
+      document.body.append(about);
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.textContent = title.textContent;
+      trigger.setAttribute("aria-haspopup", "dialog");
+      trigger.addEventListener("click", () => {
+        menu.open = false;
+        toggle.focus();
+        about.showModal();
+        about.scrollTop = 0;
+      });
+      links.append(trigger);
+    }
     const status = document.createElement("span");
     status.className = "dd-navigation-status";
     status.textContent = "LIVE - TESTNET";
