@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
       if (explorer?.error) throw explorer.error;
       const username = legacy.data?.username ?? explorer?.data?.display_name;
       if (!username) return deny();
-      const startingCredit = legacy.data ? funded.data ? 50 : 25 : 10;
+      const startingCredit = 10 + (legacy.data ? 15 : 0) + (funded.data ? 25 : 0);
       return json({ id, username, startingCredit, expiresAt: session.expires_at });
     }
 

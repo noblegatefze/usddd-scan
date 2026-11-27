@@ -277,7 +277,7 @@
     emblem.className = "dd-account-avatar-badge";
     emblem.title = badge;
     emblem.setAttribute("aria-hidden","true");
-    emblem.textContent = badge === "Legacy Backer Badge" ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
+    emblem.textContent = badge.endsWith("Backer Badge") ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
     button.replaceChildren(image,emblem);
   }
   let playStatus = "unknown";
@@ -291,7 +291,7 @@
     }
     if (event.data?.type === "flatverse-avatar" &&
         typeof event.data.username === "string" && typeof event.data.avatar === "string" &&
-        ["Legacy Backer Badge","Legacy Badge","Explorer"].includes(event.data.badge)) {
+        ["Legacy Backer Badge","Legacy Badge","Backer Badge","Explorer Badge","Explorer"].includes(event.data.badge)) {
       avatarDetails = event.data;
       paintAvatar();
     }
