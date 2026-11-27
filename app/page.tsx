@@ -1,9 +1,40 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
 import LiveRefresh, { RankResetCountdown } from "./observatory/live-refresh";
 
-export const metadata = { title: "Flatverse Observatory | DIGDUG.DO", alternates: { canonical: "https://usddd.digdug.do/" } };
+export const metadata: Metadata = {
+  "title": "Flatverse Observatory | DIGDUG.DO",
+  "description": "Track explorer activity, recent simulated extractions, and daily ranks across the Flatverse Practice World.",
+  "alternates": {
+    "canonical": "https://usddd.digdug.do/"
+  },
+  "openGraph": {
+    "title": "Flatverse Observatory | DIGDUG.DO",
+    "description": "Track explorer activity, recent simulated extractions, and daily ranks across the Flatverse Practice World.",
+    "url": "https://usddd.digdug.do/",
+    "siteName": "DIGDUG.DO",
+    "type": "website",
+    "images": [
+      {
+        "url": "https://usddd.digdug.do/flatverse-observatory.jpg",
+        "alt": "The Flatverse Observatory"
+      }
+    ]
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Flatverse Observatory | DIGDUG.DO",
+    "description": "Track explorer activity, recent simulated extractions, and daily ranks across the Flatverse Practice World.",
+    "images": [
+      {
+        "url": "https://usddd.digdug.do/flatverse-observatory.jpg",
+        "alt": "The Flatverse Observatory"
+      }
+    ]
+  }
+};
 
 type Snapshot = {
   activeDiggers: number;
