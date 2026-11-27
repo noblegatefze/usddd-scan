@@ -15,6 +15,7 @@ type Snapshot = {
   regions?: { blueCrates?: number; golden: number }[];
   captures24h?: { extractions: number; finds: number; valueCents: number; goldenFinds?: number; trackingSince: number; tokens: { symbol: string; amount: string }[] } | null;
   recentFinds?: { at: number; tokens: { symbol: string; amount: string; usdCents: number | null }[] }[];
+  lastGoldenExtraction?: { at: number; tokens: { symbol: string; amount: string; usdCents: number | null }[] } | null;
   leaderboard: { name: string; bot: boolean; score: number; runs?: number }[];
 };
 
@@ -48,7 +49,10 @@ const timestamp = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeSt
 
 export default async function ObservatoryPage() {
   const snapshot = await getSnapshot();
-  const recentFinds = snapshot?.recentFinds ?? [];
+  const recentFinds = (snapshot?.recentFinds ?? []).slice(0, 10);
+  const lastGolden = snapshot?.lastGoldenExtraction;
+  const olderGolden = lastGolden && !recentFinds.some(find => find.at === lastGolden.at && find.tokens.some(token => token.symbol === "USDDD"))
+    ? lastGolden : null;
   const captures = snapshot?.captures24h;
   const metrics = [
     { label: "Active explorers now", icon: "◉", value: snapshot ? snapshot.activeDiggers + snapshot.bots : undefined },
@@ -99,7 +103,7 @@ export default async function ObservatoryPage() {
                       <time dateTime={new Date(find.at).toISOString()}>{timestamp.format(find.at)} UTC</time>
                       {find.tokens.map((token, tokenIndex) => (
                         <div key={tokenIndex}>
-                          {token.amount} {token.symbol}
+                          {token.symbol === "USDDD" && <strong style={{color:"#ffc624"}}>Golden Cube · </strong>}{token.amount} {token.symbol}
                           {token.usdCents !== null && <span> · ${(token.usdCents / 100).toFixed(2)} at extraction</span>}
                         </div>
                       ))}
@@ -107,6 +111,13 @@ export default async function ObservatoryPage() {
                   ))}
                 </ol>
               ) : <p>{snapshot?.recentFinds ? "No practice extractions recorded yet." : "Practice extraction activity is temporarily unavailable."}</p>}
+              {olderGolden && <p>
+                <strong style={{color:"#ffc624"}}>Last Golden Cube extraction</strong>{" · "}
+                <time dateTime={new Date(olderGolden.at).toISOString()}>{timestamp.format(olderGolden.at)} UTC</time>
+                {olderGolden.tokens.filter(token => token.symbol === "USDDD").map((token,index) => (
+                  <span key={index}> · {token.amount} USDDD{token.usdCents !== null && " · $" + (token.usdCents / 100).toFixed(2) + " at extraction"}</span>
+                ))}
+              </p>}
             </div>
           </section>
           <div className="ob-side">
