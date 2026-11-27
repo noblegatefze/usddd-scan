@@ -61,7 +61,13 @@
     }
     .dd-navigation-wordmark > span{color:#594008;letter-spacing:-.045em}
     .dd-navigation > .dd-navigation-panel{position:absolute;inset:auto 0 auto auto;top:calc(100% + 7px);display:grid;gap:4px;width:min(246px,calc(100vw - 70px));padding:8px;border:1px solid #6089a3;border-radius:10px;background:#0c213b;box-shadow:0 8px 22px #0006;z-index:21}
+    .dd-navigation > .dd-navigation-dismiss{display:none}
     .dd-navigation:not([open]) > .dd-navigation-panel{display:none}
+    @media(max-width:760px), (pointer:coarse){
+      .dd-navigation[open] > .dd-navigation-dismiss{display:block;position:fixed;inset:0;z-index:20;touch-action:none}
+      .dd-navigation[open] > summary{position:relative;z-index:21}
+      .dd-navigation > .dd-navigation-panel{box-sizing:border-box;max-height:calc(100dvh - 64px);overflow:auto;overscroll-behavior:contain}
+    }
     .dd-navigation[open] > .dd-navigation-panel{animation:dd-open .18s ease-out}
     @keyframes dd-open{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
     .dd-navigation-panel > :is(a,button){display:block;min-width:0;box-sizing:border-box;padding:9px 10px!important;border-radius:6px;color:#eff7ff!important;font:600 14px system-ui!important;text-align:start!important;text-decoration:none!important;white-space:nowrap}
@@ -246,6 +252,14 @@
     links.append(status);
     if (oldNav) oldNav.classList.add("dd-navigation-replaced");
     if (!gameMenu) accountNav.insertBefore(menu, mount);
+    const dismiss = document.createElement("span");
+    dismiss.className = "dd-navigation-dismiss";
+    dismiss.setAttribute("aria-hidden", "true");
+    dismiss.addEventListener("click", () => {
+      menu.open = false;
+      toggle.focus({preventScroll:true});
+    });
+    menu.append(dismiss);
     menu.addEventListener("toggle", () => { if (!menu.open) show(current[1]); });
     document.addEventListener("pointerdown", event => {
       if (menu.open && !menu.contains(event.target)) menu.open = false;
