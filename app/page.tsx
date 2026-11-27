@@ -53,8 +53,8 @@ export default async function ObservatoryPage() {
   const metrics = [
     { label: "Active explorers now", icon: "◉", value: snapshot ? snapshot.activeDiggers + snapshot.bots : undefined },
     { label: "Extractions · last 24h", icon: "⛏", value: captures?.extractions },
-    { label: "Golden Finds · last 24h", icon: "◆", value: captures?.goldenFinds },
-    { label: "Golden signals now", icon: "◇", value: snapshot?.goldenSignals },
+    { label: "Golden Cubes · last 24h", icon: "◆", value: captures?.goldenFinds },
+    { label: "Golden cubes now", icon: "◇", value: snapshot?.goldenSignals },
   ];
   return (
     <main className="ob">
@@ -88,7 +88,7 @@ export default async function ObservatoryPage() {
             <h2>World map <small>· Flatverse mine cross-section</small></h2>
             <div className="ob-map" aria-label="Illustrated cross-section of the Flatverse mine"><div className="ob-regions">{["Americas", "Arabian Peninsula", "Pacific"].map((name, index) => {
                 const region = snapshot?.regions?.[index];
-                return <span key={name}>{name}{region && <small style={{display:"block",fontSize:12,marginTop:5}}>{region.blueCrates ?? "—"} Blue {region.blueCrates === 1 ? "Orb" : "Orbs"} · {region.golden} golden</small>}</span>;
+                return <span key={name}>{name}{region && <small style={{display:"block",fontSize:12,marginTop:5}}>{region.blueCrates ?? "—"} blue · {region.golden} golden</small>}</span>;
               })}</div></div>
             <div className="ob-extractions">
               <h2>Latest extractions</h2>
