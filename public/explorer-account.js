@@ -45,6 +45,18 @@
     .dd-account-nav > details.dd-navigation > summary:hover,.dd-navigation[open] > summary{background:#ffe17a}
     @media(max-width:380px){.dd-account-nav > details.dd-navigation > summary{padding-inline:7px;font-size:10px}.dd-navigation-header > .dd-navigation-title{font-size:14px!important}}
     .dd-navigation summary::-webkit-details-marker{display:none}
+    .dd-navigation-wordmark{
+      display:inline-block;
+      font-family:"Arial Black",system-ui,sans-serif;
+      font-size:1.08em;
+      font-weight:950;
+      letter-spacing:-.065em;
+      line-height:1;
+      white-space:nowrap;
+      padding-inline:.1em;
+      transform:skewX(-10deg);
+    }
+    .dd-navigation-wordmark > span{color:#594008;letter-spacing:-.045em}
     .dd-navigation > .dd-navigation-panel{position:absolute;inset:auto 0 auto auto;top:calc(100% + 7px);display:grid;gap:4px;width:min(246px,calc(100vw - 70px));padding:8px;border:1px solid #6089a3;border-radius:10px;background:#0c213b;box-shadow:0 8px 22px #0006;z-index:21}
     .dd-navigation:not([open]) > .dd-navigation-panel{display:none}
     .dd-navigation[open] > .dd-navigation-panel{animation:dd-open .18s ease-out}
@@ -93,7 +105,13 @@
     menu.classList.add("dd-navigation");
     const toggle = menu.querySelector("summary") || document.createElement("summary");
     toggle.setAttribute("aria-label", "FLATVERSE site navigation");
-    toggle.textContent = "FLATVERSE";
+    const wordmark = document.createElement("span");
+    wordmark.className = "dd-navigation-wordmark";
+    wordmark.textContent = "FLAT";
+    const verse = document.createElement("span");
+    verse.textContent = "VERSE";
+    wordmark.append(verse);
+    toggle.replaceChildren(wordmark);
     if (!toggle.parentNode) menu.append(toggle);
     const links = menu.querySelector("nav") || document.createElement("nav");
     links.setAttribute("aria-label", "DIGDUG.DO sites");
