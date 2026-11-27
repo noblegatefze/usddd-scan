@@ -44,9 +44,9 @@
     #gameFocus.dd-navigation-game > .dd-account-nav > #siteMenu > .dd-navigation-panel{right:-48px}
     .dd-navigation-panel > .dd-navigation-title{padding:5px 10px;font:850 13px system-ui;color:#eff7ff}
     .dd-account-nav > details.dd-navigation{position:relative;margin:0!important;z-index:20;flex:none}
-    :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation > summary{box-sizing:border-box;display:grid;place-content:center;width:auto;height:42px;padding:0 11px;border:1px solid #ffeb9e;border-radius:8px;background:#ffd34c;color:#181f2a;font:850 12px system-ui;cursor:pointer;list-style:none}
-    :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation > summary:hover,.dd-navigation[open] > summary{background:#ffe17a}
-    @media(max-width:380px){:is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation > summary{padding-inline:7px;font-size:10px}.dd-navigation-header > .dd-navigation-title{font-size:14px!important}}
+    :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation:is(.dd-navigation,#siteMenu) > summary{box-sizing:border-box;display:grid;place-content:center;width:auto;height:42px;padding:0 11px;border:1px solid #ffeb9e;border-radius:8px;background:#ffd34c;color:#181f2a;font:850 12px system-ui;cursor:pointer;list-style:none}
+    :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation:is(.dd-navigation,#siteMenu) > summary:hover,.dd-navigation[open] > summary{background:#ffe17a}
+    @media(max-width:380px){:is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation:is(.dd-navigation,#siteMenu) > summary{padding-inline:7px;font-size:10px}.dd-navigation-header > .dd-navigation-title{font-size:14px!important}}
     .dd-navigation summary::-webkit-details-marker{display:none}
     .dd-navigation-wordmark{
       display:inline-block;
