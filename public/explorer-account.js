@@ -104,9 +104,17 @@
     .dd-about-dialog h2{margin:0;font:750 19px system-ui}
     .dd-about-content{display:grid;gap:10px;font:14px/1.5 system-ui;text-align:start}
     .dd-about-content img{display:block;width:100%;max-height:145px;object-fit:cover;border-radius:8px}
-    .dd-about-content section{display:grid;gap:8px;padding:12px;border:1px solid #315670;border-radius:8px;background:#102943}
+    .dd-about-content details{padding:12px;border:1px solid #315670;border-radius:8px;background:#102943}
     .dd-about-content h3,.dd-about-content h4,.dd-about-content p{margin:0}
-    .dd-about-content h3{color:#75ddf2;font-size:15px}
+    .dd-about-content summary{color:#75ddf2;font-size:15px;font-weight:750;cursor:pointer}
+    .dd-about-section{display:grid;gap:8px;margin-top:10px}
+    .dd-navigation-panel > button.dd-about-trigger{appearance:none;background:#102943;border:1px solid #315670;cursor:pointer}
+    .dd-navigation-panel > button.dd-about-trigger:is(:hover,:focus-visible){background:#173854}
+    .dd-about-dialog,#gameGuide:has(.dd-about-content){overflow-y:auto;scrollbar-width:none}
+    .dd-about-dialog::-webkit-scrollbar,#gameGuide:has(.dd-about-content)::-webkit-scrollbar{display:none}
+    .dd-about-content th[scope="row"] small{display:block;color:#aac9de;font-weight:400}
+    .dd-about-content th[scope="row"]{padding-inline-end:12px}
+    .dd-about-badge{display:inline-grid;place-items:center;width:17px;height:17px;margin-inline-end:6px;border-radius:50%;background:#f8cd67;color:#101b26;font-size:11px}
     .dd-about-content h4{font-size:14px}
     .dd-about-content table{width:100%;border-collapse:collapse;color:inherit;font:inherit}
     .dd-about-content :is(th,td){padding:4px 0;border-bottom:1px solid #315670;text-align:start}
@@ -115,7 +123,7 @@
   document.head.append(style);
 
   const aboutContent = document.createElement("template");
-  aboutContent.innerHTML = "<div class=\"dd-about-content\">\n  <p>Flatverse is a shared exploration game. Dig beyond the Ice Wall and bring Blue Orbs back to the surface.</p>\n  <img src=\"https://www.digdug.do/flatverse-ice-wall.jpg\" alt=\"The frozen frontier beyond the Ice Wall\" loading=\"lazy\">\n  <section><h3>Lore</h3><div><h4>The last transmission</h4><p>An intelligence from beyond the Ice Wall seized the old Terminal. It studied the Zero Phase dig records and sent explorers a map to what lay beneath the ice. Then ToastPunk, the original founder, vanished.</p></div>\n<div><h4>The prisons below</h4><p>Far beneath each region, a narrow shaft leads to a prison. Step onto a portal to travel to one of the other prisons at random. Go deep enough and you might glimpse ToastPunk behind bars before he disappears again.</p></div></section>\n  <section><h3>Benefits</h3><p>Your Flatverse Passport keeps your explorer name, balance, rewards, and extraction stats together. Guest progress carries over when you set it up in the same browser.</p></section>\n  <section><h3>Testnet bonus credits</h3>\n    <table aria-label=\"Testnet bonus credits\"><thead><tr><th scope=\"col\">Badge</th><th scope=\"col\">Bonus USDDD</th></tr></thead><tbody>\n      <tr><th scope=\"row\">Explorer Badge</th><td>10</td></tr>\n      <tr><th scope=\"row\">Legacy Badge</th><td>25</td></tr>\n      <tr><th scope=\"row\">Backer Badge</th><td>35</td></tr>\n      <tr><th scope=\"row\">Legacy Backer Badge</th><td>50</td></tr>\n    </tbody></table>\n    <p>Your bonus credits are included in your USDDD balance. Testnet rewards are simulated.</p>\n  </section>\n</div>";
+  aboutContent.innerHTML = "<div class=\"dd-about-content\">\n  <p>Flatverse is a shared exploration game. Dig beyond the Ice Wall and bring Blue Orbs back to the surface.</p>\n  <img src=\"https://www.digdug.do/flatverse-ice-wall.jpg\" alt=\"The frozen frontier beyond the Ice Wall\" loading=\"lazy\">\n  <details><summary>What happened</summary><div class=\"dd-about-section\"><div><h4>The last transmission</h4><p>An intelligence from beyond the Ice Wall seized the old Terminal. It studied the Zero Phase dig records and sent explorers a map to what lay beneath the ice. Then ToastPunk, the original founder, vanished.</p></div>\n<div><h4>The prisons below</h4><p>Far beneath each region, a narrow shaft leads to a prison. Step onto a portal to travel to one of the other prisons at random. Go deep enough and you might glimpse ToastPunk behind bars before he disappears again.</p></div></div></details>\n  <details><summary>Access</summary><div class=\"dd-about-section\"><p>Your Flatverse Passport keeps your explorer name, balance, rewards, and extraction stats together. Guest progress carries over when you set it up in the same browser.</p></div></details>\n  <details><summary>Bonus</summary><div class=\"dd-about-section\"><table aria-label=\"Testnet bonus credits\"><thead><tr><th scope=\"col\">Badge</th><th scope=\"col\">Bonus USDDD</th></tr></thead><tbody>\n      <tr><th scope=\"row\"><span class=\"dd-about-badge\" aria-hidden=\"true\">✦</span>Explorer Badge<small>For everyone. Start playing on Testnet.</small></th><td>10</td></tr>\n      <tr><th scope=\"row\"><span class=\"dd-about-badge\" aria-hidden=\"true\">★</span>Legacy Badge<small>For old Terminal users. Verify your Legacy Terminal account during Passport setup.</small></th><td>25</td></tr>\n      <tr><th scope=\"row\"><span class=\"dd-about-badge\" aria-hidden=\"true\">◆</span>Backer Badge<small>For new exploration backers. Qualify with a funded exploration position.</small></th><td>35</td></tr>\n      <tr><th scope=\"row\"><span class=\"dd-about-badge\" aria-hidden=\"true\">◆</span>Legacy Backer Badge<small>For old Fund backers. Verify your Legacy Terminal account linked to a funded position.</small></th><td>50</td></tr>\n    </tbody></table>\n    <p>Your bonus credits are included in your USDDD balance. Testnet rewards are simulated.</p></div></details>\n</div>";
   const gameAbout = document.querySelector("template#guide-about");
   if (gameAbout) gameAbout.content.replaceChildren(aboutContent.content.cloneNode(true));
 
@@ -221,10 +229,12 @@
       const trigger = document.createElement("button");
       trigger.type = "button";
       trigger.textContent = title.textContent;
+      trigger.className = "dd-about-trigger";
       trigger.setAttribute("aria-haspopup", "dialog");
       trigger.addEventListener("click", () => {
         menu.open = false;
         toggle.focus();
+        for (const section of about.querySelectorAll(".dd-about-content details")) section.open = false;
         about.showModal();
         about.scrollTop = 0;
       });
