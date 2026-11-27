@@ -4,7 +4,7 @@
   if (!mount || document.querySelector(".dd-account-dialog")) return;
   const accountNav = mount.parentElement;
   const siteHeader = accountNav?.parentElement;
-  if (siteHeader?.tagName === "HEADER" && accountNav.matches(".dd-account-nav") && accountNav.querySelector(":scope > nav")) {
+  if (siteHeader?.tagName === "HEADER" && accountNav?.matches(".dd-account-nav") && accountNav.querySelector(":scope > nav")) {
     siteHeader.classList.add("dd-account-mobile-header");
   }
   const play = location.origin === "https://play.digdug.do";
@@ -33,6 +33,33 @@
       .dd-account-mobile-header .dd-account-avatar > svg{width:18px;height:18px}
       .dd-account-mobile-header .dd-account-avatar-badge{width:13px;height:13px;font-size:9px}
     }
+
+    .dd-navigation-header{display:flex!important;flex-wrap:nowrap!important;align-items:center;justify-content:space-between;gap:8px!important;overflow:visible!important}
+    .dd-navigation-title{min-width:0;white-space:nowrap;font-weight:850;line-height:1.2}
+    .dd-navigation-title > span{display:inline-block!important;color:#75ddf2!important;font-size:inherit!important}
+    .dd-navigation-replaced{display:none!important}
+    .dd-navigation-header > .dd-account-nav,.dd-navigation-game > .dd-account-nav{flex:none;gap:8px}
+    .dd-navigation-game > .dd-navigation-title{font-size:clamp(13px,2.25vw,21px);margin-right:auto}
+    .dd-account-nav > details.dd-navigation{position:relative;margin:0!important;z-index:20;flex:none}
+    .dd-account-nav > details.dd-navigation > summary{box-sizing:border-box;display:grid;place-content:center;justify-items:center;gap:4px;width:42px;height:42px;padding:0;border:1px solid #6089a3;border-radius:8px;background:#102742;cursor:pointer;list-style:none}
+    .dd-navigation summary::-webkit-details-marker{display:none}
+    .dd-navigation summary span{display:block;width:18px;height:2px;background:#e8f5ff;transition:transform .18s ease,opacity .18s ease}
+    .dd-navigation[open] summary span:first-child{transform:translateY(6px) rotate(45deg)}
+    .dd-navigation[open] summary span:nth-child(2){opacity:0}
+    .dd-navigation[open] summary span:last-child{transform:translateY(-6px) rotate(-45deg)}
+    .dd-navigation > .dd-navigation-panel{position:absolute;inset:auto 0 auto auto;top:calc(100% + 7px);display:grid;gap:4px;width:min(246px,calc(100vw - 70px));padding:8px;border:1px solid #6089a3;border-radius:10px;background:#0c213b;box-shadow:0 8px 22px #0006;z-index:21}
+    .dd-navigation:not([open]) > .dd-navigation-panel{display:none}
+    .dd-navigation[open] > .dd-navigation-panel{animation:dd-open .18s ease-out}
+    @keyframes dd-open{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+    .dd-navigation-panel > :is(a,button){display:block;min-width:0;box-sizing:border-box;padding:9px 10px!important;border-radius:6px;color:#eff7ff!important;font:600 14px system-ui!important;text-align:start!important;text-decoration:none!important;white-space:nowrap}
+    .dd-navigation-panel > [aria-current="page"]::after{content:"Current";float:right;font-size:10px;margin-top:3px;opacity:.8}
+    .dd-navigation-panel > :is(a,button):is(:hover,:focus-visible){background:#173854;outline:1px solid #69c7e8}
+    .dd-navigation-panel > a.dd-navigation-play{background:#ffd34c;color:#181f2a!important;font-weight:800!important}
+    .dd-navigation-panel > a.dd-navigation-play:hover{background:#ffe17a}
+    .dd-navigation-status{display:block;padding:5px 10px;color:#aac9de;font:12px system-ui}
+    @media(max-width:760px){.dd-navigation-header > .dd-navigation-title{font-size:clamp(15px,4.5vw,21px)}}
+    @media(max-width:540px){#gameFocus.dd-navigation-game{display:grid;grid-template-columns:auto auto 1fr;row-gap:5px}.dd-navigation-game > .dd-navigation-title{grid-column:1/3;grid-row:1}.dd-navigation-game > .dd-account-nav{grid-column:3;grid-row:1}.dd-navigation-game > #focusTop,.dd-navigation-game > #focusBottom{grid-row:2}}
+    @media(prefers-reduced-motion:reduce){.dd-navigation[open] > .dd-navigation-panel{animation:none}.dd-navigation summary span{transition:none}}
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
     .dd-account-avatar{position:relative}
     .dd-account-avatar-image{width:65%;height:65%;object-fit:cover;border-radius:50%;opacity:.6}
@@ -49,6 +76,102 @@
     .dd-account-frame{display:block;width:100%;height:min(680px,calc(100dvh - 83px));border:0;background:#071c2f}
   `;
   document.head.append(style);
+
+  const destinations = [
+    ["Home", "HOME", "https://www.digdug.do/"],
+    ["Play Flatverse", "PLAY", "https://play.digdug.do/"],
+    ["Fund Network", "FUND", "https://fund.digdug.do/"],
+    ["Observatory", "USDDD", "https://usddd.digdug.do/"],
+    ["Surface Dispatch", "FEED", "https://feed.digdug.do/"]
+  ];
+  const host = location.hostname.replace(/^www\./, "");
+  const current = destinations.find(([, , url]) => new URL(url).hostname.replace(/^www\./, "") === host);
+  const gameMenu = accountNav?.querySelector(":scope > #siteMenu");
+  const oldNav = accountNav?.querySelector(":scope > nav");
+  const brand = gameMenu ? siteHeader?.querySelector(".dd-navigation-title") : siteHeader?.firstElementChild;
+  if (current && accountNav?.matches(".dd-account-nav") && (gameMenu || (siteHeader?.tagName === "HEADER" && oldNav && brand))) {
+    const [,, currentUrl] = current;
+    const menu = gameMenu || document.createElement("details");
+    menu.classList.add("dd-navigation");
+    const toggle = menu.querySelector("summary") || document.createElement("summary");
+    toggle.setAttribute("aria-label", "Site navigation");
+    toggle.replaceChildren(...Array.from({length:3}, () => {
+      const line = document.createElement("span");
+      line.setAttribute("aria-hidden", "true");
+      return line;
+    }));
+    if (!toggle.parentNode) menu.append(toggle);
+    const links = menu.querySelector("nav") || document.createElement("nav");
+    links.setAttribute("aria-label", "DIGDUG.DO sites");
+    links.classList.add("dd-navigation-panel");
+    if (!links.parentNode) menu.append(links);
+    links.querySelectorAll(":scope > a").forEach(link => link.remove());
+    const title = brand || document.createElement("strong");
+    title.classList.add("dd-navigation-title");
+    const suffix = document.createElement("span");
+    const show = (value) => {
+      if (suffix.textContent === value) return;
+      suffix.textContent = value;
+      suffix.getAnimations().forEach(animation => animation.cancel());
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        suffix.animate([{opacity:.45,transform:"translateY(3px)"},{opacity:1,transform:"translateY(0)"}],{duration:150});
+      }
+    };
+    title.replaceChildren("DIGDUG.DO / ", suffix);
+    show(current[1]);
+    if (!brand) siteHeader.prepend(title);
+    siteHeader.classList.remove("dd-account-mobile-header");
+    siteHeader.classList.add(gameMenu ? "dd-navigation-game" : "dd-navigation-header");
+    links.prepend(...destinations.map(([label, value, url]) => {
+      const link = document.createElement("a");
+      link.textContent = label;
+      link.href = url;
+      if (url === currentUrl) link.setAttribute("aria-current", "page");
+      else if (gameMenu) { link.target = "_blank"; link.rel = "noopener"; }
+      if (value === "PLAY") link.classList.add("dd-navigation-play");
+      link.addEventListener("pointerenter", () => show(value));
+      link.addEventListener("pointerleave", () => {
+        show(links.contains(document.activeElement) ? document.activeElement.dataset.preview || current[1] : current[1]);
+      });
+      link.dataset.preview = value;
+      link.addEventListener("focus", () => show(value));
+      link.addEventListener("blur", () => show(current[1]));
+      link.addEventListener("click", event => {
+        show(value);
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (url === currentUrl) {
+          event.preventDefault();
+          menu.open = false;
+          toggle.focus();
+        } else if (gameMenu) {
+          setTimeout(() => { menu.open = false; }, 160);
+        } else if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          event.preventDefault();
+          setTimeout(() => location.assign(url), 150);
+        }
+      });
+      return link;
+    }));
+    const status = oldNav?.querySelector(".site-testnet,.ob-testnet");
+    if (status) {
+      const note = status.cloneNode(true);
+      note.className = "dd-navigation-status";
+      links.append(note);
+    }
+    if (oldNav) oldNav.classList.add("dd-navigation-replaced");
+    if (!gameMenu) accountNav.insertBefore(menu, mount);
+    menu.addEventListener("toggle", () => { if (!menu.open) show(current[1]); });
+    document.addEventListener("pointerdown", event => {
+      if (menu.open && !menu.contains(event.target)) menu.open = false;
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && menu.open) {
+        menu.open = false;
+        if (menu.contains(document.activeElement)) toggle.focus();
+      }
+    });
+  }
+
   const button = document.createElement("button");
   button.type = "button";
   button.className = "dd-account-avatar";
