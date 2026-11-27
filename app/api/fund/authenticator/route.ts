@@ -213,7 +213,22 @@ export async function POST(req: NextRequest) {
         .select("username_key").eq("username_key", username.toLowerCase()).maybeSingle();
       if (nameError) throw nameError;
       if (reserved) return json({ error: "That username is reserved. Choose another name or use its Terminal Pass." }, 409);
-      const id = randomUUID();
+      let id = randomUUID();
+      const upgradingGuest = typeof body.guestId === "string";
+      if (upgradingGuest) {
+        const guestResponse = await fetch("https://play.digdug.do/api/world?passport=1", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: body.guestId, prepare: true }),
+          signal: AbortSignal.timeout(6500),
+        });
+        if (guestResponse.status === 503) return json({ error: "Your guest profile is temporarily unavailable. Try again shortly." }, 503);
+        if (!guestResponse.ok) return json({ error: "Your guest profile could not be verified. Reopen setup and try again." }, 409);
+        const guest = await guestResponse.json();
+        if (guest.username !== username || typeof guest.accountId !== "string") {
+          return json({ error: "Your guest profile changed. Reopen setup and try again." }, 409);
+        }
+        id = guest.accountId;
+      }
       const secret = randomBytes(20);
       const challenge = token();
       const setup = await enrollmentQr(secret, username);
@@ -223,7 +238,7 @@ export async function POST(req: NextRequest) {
         expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
       if (error) throw error;
-      return json({ challenge, ...setup });
+      return json({ challenge, ...setup, upgradingGuest });
     }
 
     if (enrolling && (typeof body.pass !== "string" || !body.pass || body.pass.length > 256)) return deny();
