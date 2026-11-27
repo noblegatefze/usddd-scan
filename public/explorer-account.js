@@ -66,6 +66,7 @@
     @media(max-width:760px), (pointer:coarse){
       .dd-navigation[open] > .dd-navigation-dismiss{display:block;position:fixed;inset:0;z-index:20;touch-action:none}
       .dd-navigation[open] > summary{position:relative;z-index:21}
+      .dd-navigation-header .dd-navigation > .dd-navigation-panel{right:-38px}
       .dd-navigation > .dd-navigation-panel{box-sizing:border-box;max-height:calc(100dvh - 64px);overflow:auto;overscroll-behavior:contain}
     }
     .dd-navigation[open] > .dd-navigation-panel{animation:dd-open .18s ease-out}
