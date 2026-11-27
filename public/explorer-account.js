@@ -39,11 +39,14 @@
     .dd-navigation-title > span{display:inline-block!important;color:#75ddf2!important;font-size:inherit!important}
     .dd-navigation-replaced{display:none!important}
     .dd-navigation-header > .dd-account-nav,.dd-navigation-game > .dd-account-nav{flex:none;gap:8px}
-    .dd-navigation-game > .dd-navigation-title{font-size:clamp(13px,2.25vw,21px);margin-right:auto}
+    #gameFocus.dd-navigation-game{display:flex;flex-wrap:nowrap;align-items:center;overflow:visible}
+    #gameFocus.dd-navigation-game > :is(#focusTop,#focusBottom){flex:0 0 auto;white-space:nowrap}
+    #gameFocus.dd-navigation-game > .dd-account-nav > #siteMenu > .dd-navigation-panel{right:-48px}
+    .dd-navigation-panel > .dd-navigation-title{padding:5px 10px;font:850 13px system-ui;color:#eff7ff}
     .dd-account-nav > details.dd-navigation{position:relative;margin:0!important;z-index:20;flex:none}
-    .dd-account-nav > details.dd-navigation > summary{box-sizing:border-box;display:grid;place-content:center;width:auto;height:42px;padding:0 11px;border:1px solid #ffeb9e;border-radius:8px;background:#ffd34c;color:#181f2a;font:850 12px system-ui;cursor:pointer;list-style:none}
-    .dd-account-nav > details.dd-navigation > summary:hover,.dd-navigation[open] > summary{background:#ffe17a}
-    @media(max-width:380px){.dd-account-nav > details.dd-navigation > summary{padding-inline:7px;font-size:10px}.dd-navigation-header > .dd-navigation-title{font-size:14px!important}}
+    :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation > summary{box-sizing:border-box;display:grid;place-content:center;width:auto;height:42px;padding:0 11px;border:1px solid #ffeb9e;border-radius:8px;background:#ffd34c;color:#181f2a;font:850 12px system-ui;cursor:pointer;list-style:none}
+    :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation > summary:hover,.dd-navigation[open] > summary{background:#ffe17a}
+    @media(max-width:380px){:is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation > summary{padding-inline:7px;font-size:10px}.dd-navigation-header > .dd-navigation-title{font-size:14px!important}}
     .dd-navigation summary::-webkit-details-marker{display:none}
     .dd-navigation-wordmark{
       display:inline-block;
@@ -68,7 +71,9 @@
     .dd-navigation-panel > a.dd-navigation-play:hover{background:#ffe17a}
     .dd-navigation-status{display:block;padding:5px 10px;color:#aac9de;font:12px system-ui}
     @media(max-width:760px){.dd-navigation-header > .dd-navigation-title{font-size:clamp(15px,4.5vw,21px)}}
-    @media(max-width:540px){#gameFocus.dd-navigation-game{display:grid;grid-template-columns:auto auto 1fr;row-gap:5px}.dd-navigation-game > .dd-navigation-title{grid-column:1/3;grid-row:1}.dd-navigation-game > .dd-account-nav{grid-column:3;grid-row:1}.dd-navigation-game > #focusTop,.dd-navigation-game > #focusBottom{grid-row:2}}
+    @media(max-width:380px){
+      #gameFocus.dd-navigation-game > :is(#focusTop,#focusBottom){padding-inline:6px;font-size:12px}
+    }
     @media(prefers-reduced-motion:reduce){.dd-navigation[open] > .dd-navigation-panel{animation:none}}
     .dd-account-avatar{display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid #62d8ef;background:#103550;color:#e5fbff;font:750 19px system-ui;cursor:pointer}
     .dd-account-avatar{position:relative}
@@ -131,10 +136,9 @@
     };
     title.replaceChildren("DIGDUG.DO / ", suffix);
     show(current[1]);
-    if (!brand) siteHeader.prepend(title);
     siteHeader.classList.remove("dd-account-mobile-header");
     siteHeader.classList.add(gameMenu ? "dd-navigation-game" : "dd-navigation-header");
-    links.prepend(...destinations.map(([label, value, url]) => {
+    const destinationLinks = destinations.map(([label, value, url]) => {
       const link = document.createElement("a");
       link.textContent = label;
       link.href = url;
@@ -163,7 +167,9 @@
         }
       });
       return link;
-    }));
+    });
+    if (gameMenu) destinationLinks.unshift(title);
+    links.prepend(...destinationLinks);
     const status = oldNav?.querySelector(".site-testnet,.ob-testnet");
     if (status) {
       const note = status.cloneNode(true);
