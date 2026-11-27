@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-const favicon = "https://play.digdug.do/favicon.svg";
+const presetLabels = {"violet":"Violet aurora","teal":"Glacier cave","amber":"Sunset ice arch","blue":"Ice Wall","rose":"Frozen lake at dawn","green":"Emerald iceberg"};
 const colors = { violet: "#482875", teal: "#06565b", amber: "#714610", blue: "#1f457e", rose: "#782d54", green: "#2a5636" };
 const number = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 const dollars = new Intl.NumberFormat("en", { style: "currency", currency: "USD" });
@@ -16,12 +16,12 @@ const card = "rounded-lg border border-slate-700 bg-slate-950/35 p-3";
 const field = "min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-2.5 py-1.5 text-xs";
 
 function Avatar({ choice, badge, small = false }: { choice: string; badge?: string; small?: boolean }) {
-  const background = colors[choice as keyof typeof colors];
+  const preset = Object.hasOwn(colors, choice) ? choice as keyof typeof colors : "blue";
   const custom = /^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(choice);
   const icon = badge?.endsWith("Backer Badge") ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
-  return <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300/40 ${small ? "size-6" : "size-11"}`} style={{ backgroundColor: background ?? colors.blue }}>
+  return <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300/40 ${small ? "size-7" : "size-11"}`} style={{ backgroundColor: colors[preset] }}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={custom ? choice : favicon} alt="" className={custom ? "size-full rounded-full object-cover" : "size-2/3 rounded-full opacity-60"} />
+    <img src={custom ? choice : `/passport-avatars/${preset}.jpg`} alt="" className="size-full rounded-full object-cover" />
     {badge && <span aria-label={badge} title={badge} className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full border border-slate-900 bg-amber-300 text-[10px] text-slate-950">{icon}</span>}
   </span>;
 }
@@ -172,7 +172,7 @@ export default function ExplorerProfile({ username, badge, positions, busy, sign
       <div className="flex flex-wrap gap-2">
         {Object.keys(colors).map(color => {
           const selected = (selectedColor || profile?.avatar) === color;
-          return <button key={color} type="button" className="grid size-10 place-items-center rounded-md border border-slate-600 hover:bg-cyan-950 focus-visible:outline-2 focus-visible:outline-cyan-200 aria-pressed:border-cyan-300 aria-pressed:bg-cyan-950 aria-pressed:ring-1 aria-pressed:ring-cyan-300" aria-label={color + " Flatverse logo"} aria-pressed={selected} disabled={locked} onClick={() => { setMessage(""); setSelectedColor(color); }}><Avatar choice={color} small /></button>;
+          return <button key={color} type="button" className="grid size-10 place-items-center rounded-md border border-slate-600 hover:bg-cyan-950 focus-visible:outline-2 focus-visible:outline-cyan-200 aria-pressed:border-cyan-300 aria-pressed:bg-cyan-950 aria-pressed:ring-1 aria-pressed:ring-cyan-300" aria-label={presetLabels[color as keyof typeof presetLabels]} title={presetLabels[color as keyof typeof presetLabels]} aria-pressed={selected} disabled={locked} onClick={() => { setMessage(""); setSelectedColor(color); }}><Avatar choice={color} small /></button>;
         })}
       </div>
       <button type="button" className={button} disabled={locked || !selectedColor || selectedColor === profile?.avatar} onClick={() => void save(async () => ({ avatar: selectedColor }))}>{locked ? "Saving…" : "Save profile picture"}</button>
