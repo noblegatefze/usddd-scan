@@ -18,11 +18,14 @@ const field = "min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px
 function Avatar({ choice, badge, small = false }: { choice: string; badge?: string; small?: boolean }) {
   const preset = Object.hasOwn(colors, choice) ? choice as keyof typeof colors : "blue";
   const custom = /^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(choice);
-  const icon = badge?.endsWith("Backer Badge") ? "◆" : badge === "Legacy Badge" ? "★" : "✦";
+  const badgeKind = badge === "Legacy Backer Badge" ? "legacy-backer" : badge === "Backer Badge" ? "backer" : badge === "Legacy Badge" ? "legacy" : "explorer";
   return <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-cyan-300/40 ${small ? "size-7" : "size-11"}`} style={{ backgroundColor: colors[preset] }}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={custom ? choice : `/passport-avatars/${preset}.jpg`} alt="" className="size-full rounded-full object-cover" />
-    {badge && <span aria-label={badge} title={badge} className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full border border-slate-900 bg-amber-300 text-[10px] text-slate-950">{icon}</span>}
+    {badge && <span title={badge} className="absolute -right-1 -top-1 size-5 drop-shadow-md">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/passport-badges/${badgeKind}.svg`} alt={badge} />
+    </span>}
   </span>;
 }
 
