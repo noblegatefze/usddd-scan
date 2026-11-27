@@ -43,7 +43,9 @@
       :is(.dd-navigation-header,.dd-navigation-panel) > .dd-navigation-title{font-size:17px!important}
     }
     @media(max-width:380px){
-      :is(.dd-navigation-header,.dd-navigation-panel) > .dd-navigation-title{font-size:14px!important}
+      :is(.dd-navigation-header,.dd-navigation-panel) > .dd-navigation-title{font-size:12px!important}
+      .dd-navigation-header > .dd-account-nav{gap:6px}
+      .dd-navigation-header .dd-account-avatar{width:36px;height:36px}
     }
     .dd-navigation-title > span{display:inline-block!important;color:#75ddf2!important;font-size:inherit!important;font-weight:inherit!important;letter-spacing:inherit!important}
     .dd-navigation-replaced{display:none!important}
