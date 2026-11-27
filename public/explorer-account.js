@@ -35,18 +35,27 @@
     }
 
     .dd-navigation-header{display:flex!important;flex-wrap:nowrap!important;align-items:center;justify-content:space-between;gap:8px!important;overflow:visible!important}
-    .dd-navigation-title{min-width:0;white-space:nowrap;font-weight:850;line-height:1.2}
-    .dd-navigation-title > span{display:inline-block!important;color:#75ddf2!important;font-size:inherit!important}
+    :is(.dd-navigation-header,.dd-navigation-panel) > .dd-navigation-title{
+      min-width:0;white-space:nowrap;font:850 22px/1.2 system-ui,sans-serif!important;
+      letter-spacing:-.025em!important;text-transform:uppercase;color:#eff7ff
+    }
+    @media(max-width:760px){
+      :is(.dd-navigation-header,.dd-navigation-panel) > .dd-navigation-title{font-size:17px!important}
+    }
+    @media(max-width:380px){
+      :is(.dd-navigation-header,.dd-navigation-panel) > .dd-navigation-title{font-size:14px!important}
+    }
+    .dd-navigation-title > span{display:inline-block!important;color:#75ddf2!important;font-size:inherit!important;font-weight:inherit!important;letter-spacing:inherit!important}
     .dd-navigation-replaced{display:none!important}
     .dd-navigation-header > .dd-account-nav,.dd-navigation-game > .dd-account-nav{flex:none;gap:8px}
     #gameFocus.dd-navigation-game{display:flex;flex-wrap:nowrap;align-items:center;overflow:visible}
     #gameFocus.dd-navigation-game > :is(#focusTop,#focusBottom){flex:0 0 auto;white-space:nowrap}
     #gameFocus.dd-navigation-game > .dd-account-nav > #siteMenu > .dd-navigation-panel{right:-48px}
-    .dd-navigation-panel > .dd-navigation-title{padding:5px 10px;font:850 13px system-ui;color:#eff7ff}
+    .dd-navigation-panel > .dd-navigation-title{padding:5px 10px}
     .dd-account-nav > details.dd-navigation{position:relative;margin:0!important;z-index:20;flex:none}
     :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation:is(.dd-navigation,#siteMenu) > summary{box-sizing:border-box;display:grid;place-content:center;width:auto;height:42px;padding:0 11px;border:1px solid #ffeb9e;border-radius:8px;background:#ffd34c;color:#181f2a;font:850 12px system-ui;cursor:pointer;list-style:none}
     :is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation:is(.dd-navigation,#siteMenu) > summary:hover,.dd-navigation[open] > summary{background:#ffe17a}
-    @media(max-width:380px){:is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation:is(.dd-navigation,#siteMenu) > summary{padding-inline:7px;font-size:10px}.dd-navigation-header > .dd-navigation-title{font-size:14px!important}}
+    @media(max-width:380px){:is(.dd-account-nav,#gameFocus > .dd-account-nav) > details.dd-navigation:is(.dd-navigation,#siteMenu) > summary{padding-inline:7px;font-size:10px}}
     .dd-navigation summary::-webkit-details-marker{display:none}
     .dd-navigation-wordmark{
       display:inline-block;
@@ -81,7 +90,6 @@
     @keyframes dd-testnet-pulse{50%{opacity:.55;box-shadow:0 0 2px currentColor}}
     @keyframes dd-testnet-halo{50%{box-shadow:0 0 12px #46ff9360}}
     @media(prefers-reduced-motion:reduce){.dd-navigation-status,.dd-navigation-status::before{animation:none}}
-    @media(max-width:760px){.dd-navigation-header > .dd-navigation-title{font-size:clamp(15px,4.5vw,21px)}}
     @media(max-width:380px){
       #gameFocus.dd-navigation-game > :is(#focusTop,#focusBottom){padding-inline:6px;font-size:12px}
     }
