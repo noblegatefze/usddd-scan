@@ -69,10 +69,11 @@
     .dd-navigation-panel > :is(a,button):is(:hover,:focus-visible){background:#173854;outline:1px solid #69c7e8}
     .dd-navigation-panel > a.dd-navigation-play{background:#ffd34c;color:#181f2a!important;font-weight:800!important}
     .dd-navigation-panel > a.dd-navigation-play:hover{background:#ffe17a}
-    .dd-navigation-status{display:inline-flex;justify-self:start;align-items:center;gap:5px;margin:4px 10px;padding:3px 6px;border:1px solid #236c56;border-radius:5px;background:#092820;color:#61ff9b;box-shadow:0 0 7px #46ff932e;font:850 10px/1 system-ui;letter-spacing:.08em;text-transform:uppercase}
+    .dd-navigation-status{display:inline-flex;justify-self:center;align-items:center;gap:5px;margin:4px 10px;padding:3px 6px;border:1px solid #236c56;border-radius:5px;background:#092820;color:#61ff9b;box-shadow:0 0 7px #46ff932e;font:850 10px/1 system-ui;letter-spacing:.08em;text-transform:uppercase;animation:dd-testnet-halo 1.8s ease-in-out infinite}
     .dd-navigation-status::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 7px currentColor;animation:dd-testnet-pulse 1.8s ease-in-out infinite}
     @keyframes dd-testnet-pulse{50%{opacity:.55;box-shadow:0 0 2px currentColor}}
-    @media(prefers-reduced-motion:reduce){.dd-navigation-status::before{animation:none}}
+    @keyframes dd-testnet-halo{50%{box-shadow:0 0 12px #46ff9360}}
+    @media(prefers-reduced-motion:reduce){.dd-navigation-status,.dd-navigation-status::before{animation:none}}
     @media(max-width:760px){.dd-navigation-header > .dd-navigation-title{font-size:clamp(15px,4.5vw,21px)}}
     @media(max-width:380px){
       #gameFocus.dd-navigation-game > :is(#focusTop,#focusBottom){padding-inline:6px;font-size:12px}
@@ -173,12 +174,11 @@
     });
     if (gameMenu) destinationLinks.unshift(title);
     links.prepend(...destinationLinks);
-    const status = oldNav?.querySelector(".site-testnet,.ob-testnet");
-    if (status) {
-      const note = status.cloneNode(true);
-      note.className = "dd-navigation-status";
-      links.append(note);
-    }
+    const status = document.createElement("span");
+    status.className = "dd-navigation-status";
+    status.textContent = "LIVE - TESTNET";
+    status.title = "Testnet game rewards are simulated.";
+    links.append(status);
     if (oldNav) oldNav.classList.add("dd-navigation-replaced");
     if (!gameMenu) accountNav.insertBefore(menu, mount);
     menu.addEventListener("toggle", () => { if (!menu.open) show(current[1]); });
