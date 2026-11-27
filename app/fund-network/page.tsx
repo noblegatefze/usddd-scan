@@ -62,15 +62,6 @@ export default function FundNetwork() {
         <h1 className="text-4xl font-black tracking-tight sm:text-6xl">Fund <span className="text-amber-300">Network</span></h1>
         <p className="mt-3 text-sm text-slate-200">View Fund positions linked to your Explorer account.</p>
       </section>
-      <details className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Withdrawals and deposit support</summary>
-        <div className="mt-3 grid gap-2 text-xs text-slate-300">
-          <p>For help withdrawing an unlocked position, email <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Fund%20withdrawal">usddd@digdug.do</a> with your position reference.</p>
-          <p>New Fund positions are closed. Do not send USDT to a previously issued address.</p>
-          <p>Already sent USDT to a Fund deposit address? <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Legacy%20Fund%20deposit%20review">Request manual review</a> with your transaction hash, deposit address, and position reference if available.</p>
-
-        </div>
-      </details>
       <section aria-labelledby="usddd-pricing-title" className="min-w-0 rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
         <h2 id="usddd-pricing-title" className="mb-3 text-lg font-bold text-cyan-100">USDDD Pricing Chart</h2>
         <iframe
@@ -115,6 +106,15 @@ export default function FundNetwork() {
             </nav>
           </> : <p className="text-xs text-slate-300">No positions are linked to this account.</p>}
         </> : <p className="mt-2 text-sm text-slate-300">Sign in using the Explorer account button at the top right to see your positions.</p>}
+        </div>
+      </details>
+      <details className="rounded-lg border border-cyan-800 bg-[#061c2d] p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Withdrawals and deposit support</summary>
+        <div className="mt-3 grid gap-2 text-xs text-slate-300">
+          <p>For help withdrawing an unlocked position, email <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Fund%20withdrawal">usddd@digdug.do</a> with your position reference.</p>
+          <p>New Fund positions are closed. Do not send USDT to a previously issued address.</p>
+          <p>Already sent USDT to a Fund deposit address? <a className="text-cyan-200 underline" href="mailto:usddd@digdug.do?subject=Legacy%20Fund%20deposit%20review">Request manual review</a> with your transaction hash, deposit address, and position reference if available.</p>
+
         </div>
       </details>
 
