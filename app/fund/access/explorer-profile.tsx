@@ -5,7 +5,7 @@ const colors = { violet: "#482875", teal: "#06565b", amber: "#714610", blue: "#1
 const number = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 const dollars = new Intl.NumberFormat("en", { style: "currency", currency: "USD" });
 
-type Profile = { displayName: string; avatar: string; usddd: number; startingCredit: number | null; extractions: number; rewardsUsd: number; unpriced: number };
+type Profile = { displayName: string; avatar: string; usddd: number; bonusCredits?: number; extractions: number; rewardsUsd: number; unpriced: number };
 type Position = { status: string; funded_usdt: string | number | null; usddd_allocated?: string | number | null; usddd_accrued_display?: string | number | null };
 type Props = {
   username: string; badge: string; positions: Position[]; busy: boolean; signOut: () => void;
@@ -193,11 +193,12 @@ export default function ExplorerProfile({ username, badge, positions, busy, sign
       <details className={card}>
         <summary className="cursor-pointer text-xs font-semibold text-cyan-100">Flatverse</summary>
         <dl className="mt-2 grid gap-1 text-xs">
-          <div><dt className="text-slate-300">Simulated USDDD</dt><dd>{profile ? number.format(profile.usddd) : "—"}</dd></div>
-          <div><dt className="text-slate-300">Simulated rewards value</dt><dd>{profile ? dollars.format(profile.rewardsUsd) : "—"}</dd></div>
+          <div><dt className="text-slate-300">USDDD Balance (includes bonus)</dt><dd>{profile ? number.format(profile.usddd) : "—"}</dd></div>
+          <div><dt className="text-slate-300">Extracted rewards value</dt><dd>{profile ? dollars.format(profile.rewardsUsd) : "—"}</dd></div>
+          <div><dt className="text-slate-300">Bonus credits</dt><dd>{profile?.bonusCredits === undefined ? "—" : number.format(profile.bonusCredits)}</dd></div>
           <div><dt className="text-slate-300">Extractions</dt><dd>{profile ? number.format(profile.extractions) : "—"}</dd></div>
         </dl>
-        {!!profile?.startingCredit && <p className="mt-2 text-xs text-cyan-200">{profile.startingCredit} USDDD starting credit available on your first signed-in play.</p>}
+
       </details>
       <details className={card}>
         <summary className="cursor-pointer text-xs font-semibold text-cyan-100">Fund</summary>
