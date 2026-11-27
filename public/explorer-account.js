@@ -193,25 +193,25 @@
   const button = document.createElement("button");
   button.type = "button";
   button.className = "dd-account-avatar";
-  button.setAttribute("aria-label", "Explorer account");
+  button.setAttribute("aria-label", "Flatverse Passport");
   button.setAttribute("aria-haspopup", "dialog");
   const icon = '<svg aria-hidden="true" width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.2"/><path d="M5 20v-1.6a7 7 0 0 1 14 0V20"/></svg>';
   button.innerHTML = icon;
   const dialog = document.createElement("dialog");
   dialog.className = "dd-account-dialog";
-  dialog.setAttribute("aria-label", "Explorer account");
+  dialog.setAttribute("aria-label", "Flatverse Passport");
   const heading = document.createElement("div");
   heading.className = "dd-account-heading";
-  heading.textContent = "Explorer account";
+  heading.textContent = "Flatverse Passport";
   const close = document.createElement("button");
   close.type = "button";
   close.className = "dd-account-close";
-  close.setAttribute("aria-label", "Close Explorer account");
+  close.setAttribute("aria-label", "Close Flatverse Passport");
   close.textContent = "×";
   heading.append(close);
   const frame = document.createElement("iframe");
   frame.className = "dd-account-frame";
-  frame.title = "Explorer account forms";
+  frame.title = "Flatverse Passport setup";
   frame.referrerPolicy = "strict-origin";
   frame.src = accountOrigin + "/fund/access?view=home";
   dialog.append(heading, frame);
@@ -269,7 +269,7 @@
     }
     if (event.data?.type === "flatverse-profile") {
       username = typeof event.data.username === "string" ? event.data.username : null;
-      button.setAttribute("aria-label", username ? "Explorer account: " + username : "Explorer account");
+      button.setAttribute("aria-label", username ? "Flatverse Passport: " + username : "Flatverse Passport");
       button.title = username || "Sign in or enroll";
       if (!username) avatarDetails = undefined;
       paintAvatar();
