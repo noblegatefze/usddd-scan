@@ -88,7 +88,7 @@ export default async function ObservatoryPage() {
             <h2>World map <small>· Flatverse mine cross-section</small></h2>
             <div className="ob-map" aria-label="Illustrated cross-section of the Flatverse mine"><div className="ob-regions">{["Americas", "Arabian Peninsula", "Pacific"].map((name, index) => {
                 const region = snapshot?.regions?.[index];
-                return <span key={name}>{name}{region && <small style={{display:"block",fontSize:12,marginTop:5}}>{region.blueCrates ?? "—"} blue {region.blueCrates === 1 ? "crate" : "crates"} · {region.golden} golden</small>}</span>;
+                return <span key={name}>{name}{region && <small style={{display:"block",fontSize:12,marginTop:5}}>{region.blueCrates ?? "—"} Blue {region.blueCrates === 1 ? "Orb" : "Orbs"} · {region.golden} golden</small>}</span>;
               })}</div></div>
             <div className="ob-extractions">
               <h2>Latest extractions</h2>
