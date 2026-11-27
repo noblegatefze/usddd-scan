@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, useRef, type FormEvent } from "react";
 import ExplorerProfile from "./explorer-profile";
 
 type Position = {
@@ -37,7 +37,7 @@ function notifyParent(message: object) {
 
 export default function FundAccess() {
   const [mode, setMode] = useState<"login" | "new" | "legacy" | "finish">("login");
-  const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string; badge?: string; startingCredit?: number } | null>(null);
+  const [pending, setPending] = useState<{ challenge: string; setupKey: string; qrCode: string; badge?: string; startingCredit?: number; upgradingGuest?: boolean } | null>(null);
   const [homeWizard, setHomeWizard] = useState(false);
   const [wizardScreen, setWizardScreen] = useState<"form" | "qr" | "complete" | "forgot" | "setup">("form");
   const [embedded, setEmbedded] = useState(false);
@@ -47,6 +47,27 @@ export default function FundAccess() {
   const [positions, setPositions] = useState<Position[] | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const guestBridge = useRef<HTMLIFrameElement>(null);
+  const [guest, setGuest] = useState<{id: string; username: string} | null>();
+  const [guestUnavailable, setGuestUnavailable] = useState(false);
+
+  useEffect(() => {
+    if (!homeWizard || explorer || mode !== "new") return;
+    setGuest(undefined);
+    setGuestUnavailable(false);
+    const receive = (event: MessageEvent) => {
+      if (event.origin !== "https://play.digdug.do" || event.source !== guestBridge.current?.contentWindow ||
+          event.data?.type !== "flatverse-passport-guest") return;
+      window.clearTimeout(timeout);
+      setGuestUnavailable(event.data.unavailable === true);
+      setGuest(event.data.guest ?? null);
+    };
+    window.addEventListener("message", receive);
+    const frame = guestBridge.current;
+    if (frame) frame.src = "https://play.digdug.do/api/world?passport=1";
+    const timeout = window.setTimeout(() => setGuestUnavailable(true), 8000);
+    return () => { window.removeEventListener("message", receive); window.clearTimeout(timeout); };
+  }, [homeWizard, explorer, mode]);
 
   async function loadPositions() {
     const data = await post("positions", { authenticator: true });
@@ -119,7 +140,7 @@ export default function FundAccess() {
       const data = await post("authenticator", mode === "finish"
         ? { action: mode, challenge: pending?.challenge, code: fields.get("code") }
         : mode === "new" || mode === "legacy"
-          ? { action: "start", username: fields.get("username"), pass: mode === "legacy" ? fields.get("pass") : "" }
+          ? { action: "start", username: fields.get("username"), pass: mode === "legacy" ? fields.get("pass") : "", guestId: mode === "new" ? guest?.id : undefined }
           : { action: mode, username: fields.get("username"), code: fields.get("code") });
       form.reset();
       if (mode === "new" || mode === "legacy") {
@@ -127,12 +148,13 @@ export default function FundAccess() {
         setMode("finish");
         if (homeWizard) setWizardScreen("qr");
       } else {
-        if (homeWizard && mode === "finish") {
+        if (homeWizard && mode === "finish" && !pending?.upgradingGuest) {
           setPending(pending ? { ...pending, setupKey: "", qrCode: "", challenge: "" } : null);
           setWizardScreen("complete");
         } else {
           setPending(null);
           setMode("login");
+          setWizardScreen("form");
         }
         await loadPositions();
         sessionChannel?.postMessage("refresh");
@@ -189,8 +211,9 @@ export default function FundAccess() {
     const back = <button type="button" className={link + " justify-self-start"} onClick={() => show("login")}>← Back to sign in</button>;
     const code = <label className="grid gap-1.5 text-xs font-medium">Authenticator PIN<input className={control} name="code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required /></label>;
     return <main id="home-account-wizard" className="mx-auto grid max-w-md gap-3 bg-[#071c2f] p-4 text-xs leading-relaxed text-slate-100">
+      {mode === "new" && !explorer && <iframe ref={guestBridge} title="Check for a guest profile" referrerPolicy="origin" hidden />}
       {wizardScreen === "complete" ? <>
-        <h1 className={heading}>{pending?.badge ? "Migration complete" : "Account ready"}</h1>
+        <h1 className={heading}>{pending?.badge ? "Migration complete" : "Flatverse Passport ready"}</h1>
         {pending?.badge && <p>{pending.badge}</p>}
         <p>{pending?.startingCredit ?? 10} USDDD Practice World starting credit</p>
         <a className={primary + " block text-center"} href="https://play.digdug.do/" target="_blank" rel="noreferrer">Play Flatverse</a>
@@ -217,7 +240,7 @@ export default function FundAccess() {
         </section>
         {back}
       </> : wizardScreen === "setup" ? <>
-        <h1 className={heading}>Setup account</h1>
+        <h1 className={heading}>Set up a Flatverse Passport</h1>
         <p>Do you remember your Legacy Terminal username and Terminal Pass?</p>
         <div className="grid grid-cols-2 gap-3">
           <button type="button" className={primary} onClick={() => show("legacy")}>Yes</button>
@@ -236,18 +259,20 @@ export default function FundAccess() {
         <button type="button" className={primary} onClick={() => setWizardScreen("form")}>Continue</button>
       </> : <>
         {mode !== "login" && <>
-          <h1 className={heading}>{mode === "legacy" ? "Migrating from the Legacy Terminal" : mode === "new" ? "Create your account" : "Verify your Authenticator"}</h1>
+          <h1 className={heading}>{mode === "legacy" ? "Migrating from the Legacy Terminal" : mode === "new" ? "Create your Flatverse Passport" : "Verify your Authenticator"}</h1>
           <p className={step}>Step {mode === "finish" ? 3 : 1} of 3</p>
         </>}
         <form key={mode} onSubmit={submit} className="grid gap-3">
-          {mode !== "finish" && <label className="grid gap-1.5 text-xs font-medium">{mode === "new" ? "Choose a username" : "Username"}<input className={control} name="username" autoComplete="username" maxLength={100} pattern={"[^\\s]+"} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\s+/gu, ""); }} required /></label>}
+          {mode !== "finish" && <label className="grid gap-1.5 text-xs font-medium">{mode === "new" ? "Choose a username" : "Username"}<input className={control} name="username" defaultValue={mode === "new" ? guest?.username : undefined} key={mode === "new" ? guest?.username ?? "new" : mode} readOnly={mode === "new" && !!guest} autoComplete="username" maxLength={100} pattern={"[^\\s]+"} onKeyDown={(event) => { if (event.key === " ") event.preventDefault(); }} onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\s+/gu, ""); }} required /></label>}
           {mode === "legacy" && <label className="grid gap-1.5 text-xs font-medium">Terminal Pass<input className={control} name="pass" type="password" autoComplete="current-password" maxLength={256} required /></label>}
           {(mode === "login" || mode === "finish") && code}
+          {mode === "new" && guest && <p>Your guest progress and balance will carry over to your Flatverse Passport.</p>}
+          {mode === "new" && guestUnavailable && <p role="status">Couldn’t check for guest progress. Reopen setup and try again.</p>}
           {mode === "new" && explorerEnrollment && <p className="text-xs text-slate-300">Player-operated bots, scripts, macros, and other gameplay automation are prohibited. <a className={link} href="https://play.digdug.do/#game-rules" target="_blank" rel="noreferrer">Read the game rules</a>.</p>}
           {mode === "new" && !explorerEnrollment && <p className="text-xs text-amber-300">Public Explorer enrollment is pending.</p>}
-          <button className={primary} disabled={busy || (mode === "new" && !explorerEnrollment)}>{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "finish" ? "Verify and sign in" : "Continue"}</button>
+          <button className={primary} disabled={busy || (mode === "new" && (!explorerEnrollment || guest === undefined || guestUnavailable))}>{busy ? "Checking…" : mode === "login" ? "Sign in" : mode === "finish" ? "Verify and sign in" : "Continue"}</button>
         </form>
-        {mode === "login" ? <div className="flex justify-between border-t border-slate-700 pt-2.5"><button type="button" className={link} disabled={busy} onClick={openSetup}>Setup account</button><button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("forgot"); }}>Forgot</button></div>
+        {mode === "login" ? <div className="flex justify-between border-t border-slate-700 pt-2.5"><button type="button" className={link} disabled={busy} onClick={openSetup}>Set up a Flatverse Passport</button><button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("forgot"); }}>Forgot</button></div>
           : mode === "finish" ? <button type="button" className={link} disabled={busy} onClick={() => { setMessage(""); setWizardScreen("qr"); }}>Back to QR code</button> : <button type="button" className={link} disabled={busy} onClick={openSetup}>Back to setup</button>}
       </>}
       {message && <p role="status" className="rounded-md border border-amber-300/25 bg-amber-900/15 px-3 py-2 text-xs text-amber-200">{message}</p>}
@@ -272,7 +297,7 @@ export default function FundAccess() {
       <button type="button" disabled={busy} onClick={signOut} className="underline">Sign out</button>
     </> : <>
       {mode !== "finish" && <div role="group" aria-label="Account options" className="mt-4 flex flex-wrap gap-2">
-        {([["legacy", "Migrate a Legacy account"], ["new", "Create a new Explorer account"], ["login", "Already enrolled? Sign in"]] as const).map(([option, label]) => <button key={option} type="button" disabled={busy} aria-pressed={mode === option} className="rounded-md border border-sky-500 px-3 py-2 text-sm aria-pressed:bg-sky-950" onClick={() => { setMode(option); setMessage(""); }}>{label}</button>)}
+        {([["legacy", "Migrate a Legacy account"], ["new", "Create a Flatverse Passport"], ["login", "Already enrolled? Sign in"]] as const).map(([option, label]) => <button key={option} type="button" disabled={busy} aria-pressed={mode === option} className="rounded-md border border-sky-500 px-3 py-2 text-sm aria-pressed:bg-sky-950" onClick={() => { setMode(option); setMessage(""); }}>{label}</button>)}
       </div>}
       <h2 className="mt-6 text-xl">{mode === "login" ? "Sign in" : mode === "finish" ? "Confirm your setup" : mode === "legacy" ? "Migrate your Legacy account" : "Create an Explorer account"}</h2>
       {mode === "legacy" && <p className="mt-2 text-sm text-slate-300">Verify your existing username and Terminal Pass once. The Legacy Badge starts with 25 USDDD and the Legacy Backer Badge starts with 50 USDDD in the Practice World.</p>}
